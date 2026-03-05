@@ -4,8 +4,9 @@
 #
 set -euo pipefail
 
-SPARK_HOME="${SPARK_HOME:-/home/hadoop/spark-3.5.0-bin-hadoop3}"
-INCREMENTAL_SCRIPT="${INCREMENTAL_SCRIPT:-/home/hadoop/incremental_batch_1.py}"
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+# shellcheck source=load_config.sh
+source "${SCRIPT_DIR}/load_config.sh"
 
 echo "======================================"
 echo "Generating incremental batch data"
@@ -17,14 +18,14 @@ echo "======================================"
 "${SPARK_HOME}/bin/spark-submit" \
   --master yarn \
   --deploy-mode client \
-  --conf spark.driver.memory=4g \
-  --conf spark.executor.memory=9g \
-  --conf spark.executor.cores=3 \
-  --conf spark.executor.instances=3 \
+  --conf spark.driver.memory="${SPARK_DRIVER_MEMORY}" \
+  --conf spark.executor.memory="${SPARK_EXECUTOR_MEMORY}" \
+  --conf spark.executor.cores="${SPARK_EXECUTOR_CORES}" \
+  --conf spark.executor.instances="${SPARK_EXECUTOR_INSTANCES}" \
   --conf spark.eventLog.enabled=true \
-  --conf spark.eventLog.dir=hdfs:///var/log/spark/apps \
-  --conf spark.sql.shuffle.partitions=200 \
-  --conf spark.default.parallelism=9 \
+  --conf spark.eventLog.dir="${SPARK_EVENT_LOG_DIR}" \
+  --conf spark.sql.shuffle.partitions="${SPARK_SHUFFLE_PARTITIONS}" \
+  --conf spark.default.parallelism="${SPARK_DEFAULT_PARALLELISM}" \
   --conf spark.sql.adaptive.enabled=true \
   "$INCREMENTAL_SCRIPT"
 

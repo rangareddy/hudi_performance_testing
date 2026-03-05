@@ -5,8 +5,9 @@
 #
 set -euo pipefail
 
-SPARK_HOME="${SPARK_HOME:-/home/hadoop/spark-3.5.0-bin-hadoop3}"
-INITIAL_BATCH_SCALA="${INITIAL_BATCH_SCALA:-/home/hadoop/initial_batch.scala}"
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+# shellcheck source=load_config.sh
+source "${SCRIPT_DIR}/load_config.sh"
 
 echo "======================================"
 echo "Running initial ingestion"
@@ -18,12 +19,12 @@ echo "======================================"
 "${SPARK_HOME}/bin/spark-shell" \
   --master yarn \
   --deploy-mode client \
-  --conf spark.driver.memory=2g \
-  --conf spark.executor.memory=7g \
-  --conf spark.executor.cores=3 \
-  --conf spark.executor.instances=3 \
-  --conf spark.sql.shuffle.partitions=200 \
-  --conf spark.default.parallelism=9 \
+  --conf spark.driver.memory="${SPARK_INITIAL_DRIVER_MEMORY}" \
+  --conf spark.executor.memory="${SPARK_INITIAL_EXECUTOR_MEMORY}" \
+  --conf spark.executor.cores="${SPARK_EXECUTOR_CORES}" \
+  --conf spark.executor.instances="${SPARK_EXECUTOR_INSTANCES}" \
+  --conf spark.sql.shuffle.partitions="${SPARK_SHUFFLE_PARTITIONS}" \
+  --conf spark.default.parallelism="${SPARK_DEFAULT_PARALLELISM}" \
   --conf spark.sql.adaptive.enabled=true \
   --conf spark.hadoop.mapreduce.fileoutputcommitter.algorithm.version=2 \
   --conf spark.hadoop.fs.s3a.committer.name=directory \

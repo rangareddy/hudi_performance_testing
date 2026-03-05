@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
-Incremental Batch 1 - Filter and append specific records
-Usage: spark-submit incremental_batch_1.py
+Incremental Batch - Filter and append specific records
+Usage: spark-submit incremental_batch.py
 """
 
 from pyspark.sql import SparkSession
@@ -15,7 +15,7 @@ spark = SparkSession.builder \
 # S3 path
 data_path = "s3://performance-benchmark-datasets-us-west-2/hudi-bench/pavijars/data/wide_500cols_10000parts"
 
-print(f"🚀 Starting incremental batch 1...")
+print(f"🚀 Starting incremental batch...")
 print(f"📍 Reading from: {data_path}")
 
 # Read the existing parquet data
@@ -31,7 +31,7 @@ print(f"💾 Appending filtered data back to: {data_path}")
 # Append the filtered data back
 filtered_df.write.mode("append").parquet(data_path)
 
-print("✅ Incremental batch 1 completed successfully")
+print("✅ Incremental batch completed successfully")
 
 # Stop the spark session
 spark.stop()
