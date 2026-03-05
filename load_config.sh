@@ -57,6 +57,11 @@ load_config() {
     fi
   fi
 
+  HADOOP_CONF_DIR=${HADOOP_CONF_DIR:-''}
+  if [ -z "$HADOOP_CONF_DIR" ]; then
+    export HADOOP_CONF_DIR=/etc/hadoop/conf
+  fi
+  
   return 0
 }
 

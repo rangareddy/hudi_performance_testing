@@ -26,6 +26,15 @@ Benchmark 2 - use initial_batch.scala
 * S3 URI for jars and data generation script:
 	s3://performance-benchmark-datasets-us-west-2/hudi-bench/logical_ts_perf/data/
 
+
+```sh
+bash setup_node.sh
+```
+
+```sh
+bash run_initial_ingestion.sh
+```
+
 **Node setup:**
 
 ```sh

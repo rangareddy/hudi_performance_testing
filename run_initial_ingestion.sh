@@ -23,6 +23,7 @@ echo "======================================"
 "${SPARK_HOME}/bin/spark-shell" \
   --master yarn \
   --deploy-mode client \
+  --jars $SPARK_HOME/jars/aws-java-sdk-bundle.jar,$SPARK_HOME/jars/hadoop-aws.jar \
   --properties-file "${SPARK_DEFAULTS_CONF}" \
   --conf spark.sql.adaptive.enabled=true \
   --conf spark.hadoop.mapreduce.fileoutputcommitter.algorithm.version=2 \
