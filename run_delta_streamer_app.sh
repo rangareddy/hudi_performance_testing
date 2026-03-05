@@ -9,7 +9,7 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 # shellcheck source=load_config.sh
 source "${SCRIPT_DIR}/load_config.sh"
 
-HUDI_JARS_DELTA="${JARS_PATH}/hudi-spark${SPARK_VERSION}-bundle_2.12-${HUDI_VERSION}.jar,${JARS_PATH}/hudi-utilities-slim-bundle_2.12-${HUDI_VERSION}.jar"
+HUDI_JARS_DELTA="${JARS_PATH}/hudi-spark${SPARK_MAJOR_VERSION}-bundle_${SCALA_VERSION}-${HUDI_VERSION}.jar,${JARS_PATH}/hudi-utilities-slim-bundle_${SCALA_VERSION}-${HUDI_VERSION}.jar"
 
 # Schema file: use file:// if local path
 SCHEMA_FILE_ARG="$SCHEMA_FILE"

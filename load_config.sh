@@ -29,6 +29,8 @@ load_config() {
     fi
   done < "$config_file"
 
+  export SPARK_MAJOR_VERSION=$(echo "${SPARK_VERSION}" | cut -d '.' -f 1,2)
+
   # Derived paths (only if not already set)
   [[ -z "${JARS_PATH:-}" && -n "${BASE_PATH:-}" ]] && export JARS_PATH="${BASE_PATH}/jars"
   [[ -z "${DATA_PATH:-}" && -n "${BASE_PATH:-}" ]] && export DATA_PATH="${BASE_PATH}/data"
@@ -37,8 +39,8 @@ load_config() {
   [[ -z "${BASE_DATA_PATH:-}" && -n "${DATA_PATH:-}" ]] && export BASE_DATA_PATH="${DATA_PATH}"
 
   # Hudi jars for benchmark (spark-submit read benchmark)
-  if [[ -z "${HUDI_JARS:-}" && -n "${JARS_PATH:-}" && -n "${HUDI_VERSION:-}" && -n "${SPARK_VERSION:-}" && -n "${SCALA_VERSION:-}" ]]; then
-    export HUDI_JARS="${JARS_PATH}/hudi-spark${SPARK_VERSION}-bundle_${SCALA_VERSION}-${HUDI_VERSION}.jar,${JARS_PATH}/hudi-utilities-slim-bundle_${SCALA_VERSION}-${HUDI_VERSION}.jar"
+  if [[ -z "${HUDI_JARS:-}" && -n "${JARS_PATH:-}" && -n "${HUDI_VERSION:-}" && -n "${SPARK_MAJOR_VERSION:-}" && -n "${SCALA_VERSION:-}" ]]; then
+    export HUDI_JARS="${JARS_PATH}/hudi-spark${SPARK_MAJOR_VERSION}-bundle_${SCALA_VERSION}-${HUDI_VERSION}.jar,${JARS_PATH}/hudi-utilities-slim-bundle_${SCALA_VERSION}-${HUDI_VERSION}.jar"
   fi
 
   # Delta Streamer --props must be file:// URL when using local path

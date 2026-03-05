@@ -20,12 +20,14 @@ echo "SPARK_VERSION     : ${SPARK_VERSION}"
 echo "DEST_DIR          : ${DEST_DIR}"
 echo "======================================"
 
-echo "Downloading Hudi 0.14.1 jars..."
-aws s3 cp "${JARS_PATH}/hudi-spark${SPARK_VERSION}-bundle_2.12-0.14.1.jar" .
-aws s3 cp "${JARS_PATH}/hudi-utilities-slim-bundle_2.12-0.14.1.jar" .
+if [[ ! -d "$SPARK_HOME" ]]; then
+  SPARK_TAR_FILE="spark-${SPARK_VERSION}-bin-hadoop${HADOOP_VERSION}.tgz"
+  SPARK_URL="https://archive.apache.org/dist/spark/spark-${SPARK_VERSION}/${SPARK_TAR_FILE}"
+  if [[ ! -f "$HOME/${SPARK_TAR_FILE}" ]]; then
+    wget -O "$HOME/${SPARK_TAR_FILE}" "$SPARK_URL"
+  fi
+  tar -xzf "$HOME/${SPARK_TAR_FILE}" -C "$HOME"
+  rm -f "$HOME/${SPARK_TAR_FILE}"
+fi
 
-echo "Downloading Hudi ${HUDI_VERSION} jars..."
-aws s3 cp "${JARS_PATH}/hudi-spark${SPARK_VERSION}-bundle_2.12-${HUDI_VERSION}.jar" .
-aws s3 cp "${JARS_PATH}/hudi-utilities-slim-bundle_2.12-${HUDI_VERSION}.jar" .
-
-echo "✅ Node setup complete. Jars in $DEST_DIR, scripts in $DEST_SCRIPTS_DIR"
+echo "✅ Node setup complete. Jars in $DEST_DIR, scripts in $DEST_SCRIPTS_DIR, Spark in $SPARK_HOME"
