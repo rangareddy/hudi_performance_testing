@@ -9,27 +9,28 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 # shellcheck source=load_config.sh
 source "${SCRIPT_DIR}/load_config.sh"
 
-HUDI_JARS="${JARS_PATH}/hudi-spark${SPARK_VERSION}-bundle_2.12-${HUDI_VERSION}.jar,${JARS_PATH}/hudi-utilities-slim-bundle_2.12-${HUDI_VERSION}.jar"
+HUDI_JARS_DELTA="${JARS_PATH}/hudi-spark${SPARK_VERSION}-bundle_2.12-${HUDI_VERSION}.jar,${JARS_PATH}/hudi-utilities-slim-bundle_2.12-${HUDI_VERSION}.jar"
+
+# Schema file: use file:// if local path
+SCHEMA_FILE_ARG="$SCHEMA_FILE"
+if [[ -n "$SCHEMA_FILE_ARG" && "$SCHEMA_FILE_ARG" != file://* && "$SCHEMA_FILE_ARG" != s3:* ]]; then
+  SCHEMA_FILE_ARG="file://${SCHEMA_FILE}"
+fi
 
 echo "======================================"
 echo "Running Delta Streamer"
 echo "--------------------------------------"
-echo "HUDI_VERSION   : $HUDI_VERSION"
-echo "TABLE_TYPE     : $TABLE_TYPE"
-echo "TABLE_BASE_PATH: $TABLE_BASE_PATH"
-echo "SOURCE_DFS_ROOT: $SOURCE_DFS_ROOT"
+echo "HUDI_VERSION    : $HUDI_VERSION"
+echo "TABLE_TYPE      : $TABLE_TYPE"
+echo "TABLE_BASE_PATH : $TABLE_BASE_PATH"
+echo "SOURCE_DFS_ROOT : $SOURCE_DFS_ROOT"
 echo "======================================"
 
 time "$SPARK_HOME/bin/spark-submit" \
   --master yarn \
   --deploy-mode client \
+  --properties-file "${SPARK_DEFAULTS_CONF}" \
   --class org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamer \
-  --driver-memory "${SPARK_DELTASTREAMER_DRIVER_MEMORY}" \
-  --executor-memory "${SPARK_DELTASTREAMER_EXECUTOR_MEMORY}" \
-  --executor-cores "${SPARK_EXECUTOR_CORES}" \
-  --num-executors "${SPARK_EXECUTOR_INSTANCES}" \
-  --conf spark.eventLog.enabled=true \
-  --conf spark.eventLog.dir="${SPARK_EVENT_LOG_DIR}" \
   --conf spark.dynamicAllocation.enabled=true \
   --conf spark.sql.adaptive.enabled=true \
   --conf spark.hadoop.mapreduce.fileoutputcommitter.algorithm.version=2 \
@@ -39,7 +40,7 @@ time "$SPARK_HOME/bin/spark-submit" \
   --conf spark.serializer=org.apache.spark.serializer.KryoSerializer \
   --conf spark.sql.extensions=org.apache.spark.sql.hudi.HoodieSparkSessionExtension \
   --conf spark.sql.catalog.spark_catalog=org.apache.spark.sql.hudi.catalog.HoodieCatalog \
-  --jars "$HUDI_JARS" \
+  --jars "$HUDI_JARS_DELTA" \
   --props "$PROPS_FILE" \
   --table-type "$TABLE_TYPE" \
   --op UPSERT \
@@ -49,8 +50,8 @@ time "$SPARK_HOME/bin/spark-submit" \
   --schemaprovider-class org.apache.hudi.utilities.schema.FilebasedSchemaProvider \
   --source-ordering-field col_1 \
   --hoodie-conf hoodie.deltastreamer.source.dfs.root="${SOURCE_DFS_ROOT}" \
-  --hoodie-conf hoodie.deltastreamer.schemaprovider.source.schema.file="$SCHEMA_FILE" \
-  --hoodie-conf hoodie.deltastreamer.schemaprovider.target.schema.file="$SCHEMA_FILE" \
+  --hoodie-conf hoodie.deltastreamer.schemaprovider.source.schema.file="$SCHEMA_FILE_ARG" \
+  --hoodie-conf hoodie.deltastreamer.schemaprovider.target.schema.file="$SCHEMA_FILE_ARG" \
   --hoodie-conf hoodie.datasource.write.recordkey.field=col_1 \
   --hoodie-conf hoodie.datasource.write.precombine.field=col_1 \
   --hoodie-conf hoodie.datasource.write.partitionpath.field=partition_col

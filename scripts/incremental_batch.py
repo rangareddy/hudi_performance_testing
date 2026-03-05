@@ -2,8 +2,10 @@
 """
 Incremental Batch - Filter and append specific records
 Usage: spark-submit incremental_batch.py
+Environment: SOURCE_DFS_ROOT (parquet data path). Set by generate_incremental_batch_data.sh from common.properties.
 """
 
+import os
 from pyspark.sql import SparkSession
 from pyspark.sql.functions import col
 
@@ -12,8 +14,11 @@ spark = SparkSession.builder \
     .appName("WideTimestampExample-IncrementalBatch1") \
     .getOrCreate()
 
-# S3 path
-data_path = "s3://performance-benchmark-datasets-us-west-2/hudi-bench/pavijars/data/wide_500cols_10000parts"
+# Data path from env (set by shell from common.properties)
+data_path = os.environ.get(
+    "SOURCE_DFS_ROOT",
+    "s3://performance-benchmark-datasets-us-west-2/hudi-bench/performance/logical_ts_perf/data/wide_500cols_10000parts"
+)
 
 print(f"🚀 Starting incremental batch...")
 print(f"📍 Reading from: {data_path}")

@@ -21,14 +21,39 @@ load_config() {
     line="${line%"${line##*[![:space:]]}"}"  # strip trailing space
     [[ -z "$line" ]] && continue
     if [[ "$line" =~ ^([A-Za-z_][A-Za-z0-9_]*)=(.*)$ ]]; then
-      export "${BASH_REMATCH[1]}=${BASH_REMATCH[2]}"
+      local key="${BASH_REMATCH[1]}"
+      local val="${BASH_REMATCH[2]}"
+      # Expand $VAR and ${VAR} in value (so JARS_PATH=$BASE_PATH/jars works)
+      val="$(eval echo "$val")"
+      export "${key}=${val}"
     fi
   done < "$config_file"
 
   # Derived paths (only if not already set)
   [[ -z "${JARS_PATH:-}" && -n "${BASE_PATH:-}" ]] && export JARS_PATH="${BASE_PATH}/jars"
-  [[ -z "${TABLE_BASE_PATH:-}" && -n "${BASE_PATH:-}" ]] && export TABLE_BASE_PATH="${BASE_PATH}/data/hudi_mor_logical"
-  [[ -z "${SOURCE_DFS_ROOT:-}" && -n "${BASE_PATH:-}" ]] && export SOURCE_DFS_ROOT="${BASE_PATH}/data/wide_500cols_10000parts"
+  [[ -z "${DATA_PATH:-}" && -n "${BASE_PATH:-}" ]] && export DATA_PATH="${BASE_PATH}/data"
+  [[ -z "${TABLE_BASE_PATH:-}" && -n "${DATA_PATH:-}" && -n "${TABLE_NAME:-}" ]] && export TABLE_BASE_PATH="${DATA_PATH}/hudi_logical"
+  [[ -z "${SOURCE_DFS_ROOT:-}" && -n "${DATA_PATH:-}" ]] && export SOURCE_DFS_ROOT="${DATA_PATH}/wide_500cols_10000parts"
+  [[ -z "${BASE_DATA_PATH:-}" && -n "${DATA_PATH:-}" ]] && export BASE_DATA_PATH="${DATA_PATH}"
+
+  # Hudi jars for benchmark (spark-submit read benchmark)
+  if [[ -z "${HUDI_JARS:-}" && -n "${JARS_PATH:-}" && -n "${HUDI_VERSION:-}" && -n "${SPARK_VERSION:-}" && -n "${SCALA_VERSION:-}" ]]; then
+    export HUDI_JARS="${JARS_PATH}/hudi-spark${SPARK_VERSION}-bundle_${SCALA_VERSION}-${HUDI_VERSION}.jar,${JARS_PATH}/hudi-utilities-slim-bundle_${SCALA_VERSION}-${HUDI_VERSION}.jar"
+  fi
+
+  # Delta Streamer --props must be file:// URL when using local path
+  if [[ -n "${PROPS_FILE:-}" && "$PROPS_FILE" != file://* && "$PROPS_FILE" != s3:* ]]; then
+    export PROPS_FILE="file://${PROPS_FILE}"
+  fi
+
+  # Resolve SPARK_DEFAULTS_CONF to absolute path so spark-submit finds it from any cwd
+  if [[ -n "${SPARK_DEFAULTS_CONF:-}" && "$SPARK_DEFAULTS_CONF" != /* ]]; then
+    local config_dir
+    config_dir="$(dirname "$config_file")"
+    if [[ -f "$config_dir/$SPARK_DEFAULTS_CONF" ]]; then
+      export SPARK_DEFAULTS_CONF="$(cd "$config_dir" && cd "$(dirname "$SPARK_DEFAULTS_CONF")" && pwd)/$(basename "$SPARK_DEFAULTS_CONF")"
+    fi
+  fi
 
   return 0
 }

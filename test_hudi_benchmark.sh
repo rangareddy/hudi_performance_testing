@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 #
 # Run Hudi read benchmark (distinct query) for COPY_ON_WRITE or MERGE_ON_READ tables.
-# Use with 0.14.1 or 0.14.2 jars to compare read performance.
+# Use with 0.14.1 or 0.14.2 jars to compare read performance (set HUDI_VERSION in common.properties).
 #
 set -euo pipefail
 
@@ -63,17 +63,17 @@ fi
 TABLE_TYPE_UPPER=$(echo "$TABLE_TYPE_ARG" | tr '[:lower:]' '[:upper:]')
 
 ############################################
-# Validate Table Type and set DATA_PATH
+# Validate Table Type and set DATA_PATH for benchmark
 ############################################
 
 case "$TABLE_TYPE_UPPER" in
   COPY_ON_WRITE|COW)
     TABLE_TYPE="COPY_ON_WRITE"
-    DATA_PATH="${BASE_DATA_PATH}/hudi_cow_logical"
+    BENCH_DATA_PATH="${BASE_DATA_PATH}/hudi_cow_logical"
     ;;
   MERGE_ON_READ|MOR)
     TABLE_TYPE="MERGE_ON_READ"
-    DATA_PATH="${BASE_DATA_PATH}/hudi_mor_logical"
+    BENCH_DATA_PATH="${BASE_DATA_PATH}/hudi_mor_logical"
     ;;
   *)
     echo "❌ Invalid TABLE_TYPE: $TABLE_TYPE_ARG"
@@ -90,7 +90,7 @@ echo "======================================"
 echo "🚀 Starting Hudi Benchmark"
 echo "--------------------------------------"
 echo "Table Type : $TABLE_TYPE"
-echo "Data Path  : $DATA_PATH"
+echo "Data Path  : $BENCH_DATA_PATH"
 echo "Spark Home : $SPARK_HOME"
 echo "Script     : $PY_SCRIPT"
 echo "======================================"
@@ -102,21 +102,14 @@ echo "======================================"
 "$SPARK_HOME/bin/spark-submit" \
   --master yarn \
   --deploy-mode client \
+  --properties-file "${SPARK_DEFAULTS_CONF}" \
   --jars "$HUDI_JARS" \
   --conf "spark.serializer=org.apache.spark.serializer.KryoSerializer" \
   --conf "spark.sql.catalog.spark_catalog=org.apache.spark.sql.hudi.catalog.HoodieCatalog" \
   --conf "spark.sql.extensions=org.apache.spark.sql.hudi.HoodieSparkSessionExtension" \
-  --conf "spark.driver.memory=${SPARK_DRIVER_MEMORY}" \
-  --conf "spark.executor.memory=${SPARK_EXECUTOR_MEMORY}" \
-  --conf "spark.executor.cores=${SPARK_EXECUTOR_CORES}" \
-  --conf "spark.executor.instances=${SPARK_EXECUTOR_INSTANCES}" \
-  --conf "spark.eventLog.enabled=true" \
-  --conf "spark.eventLog.dir=${SPARK_EVENT_LOG_DIR}" \
-  --conf "spark.sql.shuffle.partitions=${SPARK_SHUFFLE_PARTITIONS}" \
-  --conf "spark.default.parallelism=${SPARK_DEFAULT_PARALLELISM}" \
   --conf "spark.sql.adaptive.enabled=true" \
   "$PY_SCRIPT" \
-  "$DATA_PATH"
+  "$BENCH_DATA_PATH"
 
 echo ""
 echo "✅ Benchmark job submitted successfully"
