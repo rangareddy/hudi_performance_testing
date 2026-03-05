@@ -35,6 +35,10 @@ bash setup_node.sh
 bash run_initial_ingestion.sh
 ```
 
+```sh
+bash run_delta_streamer_app.sh --table-type COPY_ON_WRITE
+```
+
 **Node setup:**
 
 ```sh

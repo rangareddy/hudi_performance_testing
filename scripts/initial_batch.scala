@@ -95,3 +95,5 @@ df.show(5, false)
 
 // Stop the spark session
 spark.stop()
+
+System.exit(0)

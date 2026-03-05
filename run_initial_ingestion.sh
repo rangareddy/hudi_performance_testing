@@ -15,9 +15,9 @@ export SOURCE_DFS_ROOT
 echo "======================================"
 echo "Running initial ingestion"
 echo "--------------------------------------"
-echo "SPARK_HOME       : $SPARK_HOME"
-echo "Script           : $INITIAL_BATCH_SCALA"
-echo "SOURCE_DFS_ROOT  : $SOURCE_DFS_ROOT"
+echo "SPARK_HOME        : $SPARK_HOME"
+echo "Script            : $INITIAL_BATCH_SCALA"
+echo "SOURCE_DATA_PATH  : $SOURCE_DFS_ROOT"
 echo "======================================"
 
 "${SPARK_HOME}/bin/spark-shell" \
