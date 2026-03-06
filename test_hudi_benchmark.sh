@@ -6,6 +6,7 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+
 # shellcheck source=load_config.sh
 source "${SCRIPT_DIR}/load_config.sh"
 
@@ -18,11 +19,11 @@ SCRIPT_NAME="$0"
 usage() {
   echo ""
   echo "Usage:"
-  echo "  bash $SCRIPT_NAME --table-type <COPY_ON_WRITE|MERGE_ON_READ>"
+  echo "  bash $SCRIPT_NAME --table-type <COPY_ON_WRITE|MERGE_ON_READ> --target-hudi-version <0.14.1|0.14.2>"
   echo ""
   echo "Examples:"
-  echo "  bash $SCRIPT_NAME --table-type COPY_ON_WRITE"
-  echo "  bash $SCRIPT_NAME --table-type MERGE_ON_READ"
+  echo "  bash $SCRIPT_NAME --table-type COPY_ON_WRITE --target-hudi-version 0.14.1"
+  echo "  bash $SCRIPT_NAME --table-type MERGE_ON_READ --target-hudi-version 0.14.2"
   echo ""
   exit 1
 }
@@ -31,6 +32,7 @@ usage() {
 # Parse Arguments
 ############################################
 
+TARGET_HUDI_VERSION="$HUDI_VERSION"
 while [[ $# -gt 0 ]]; do
   case $1 in
     --table-type)
@@ -41,6 +43,14 @@ while [[ $# -gt 0 ]]; do
       TABLE_TYPE_ARG="$2"
       shift 2
       ;;
+    --target-hudi-version)
+      if [[ -z "${2:-}" ]]; then
+        echo "❌ Error: --target-hudi-version requires a value"
+        usage
+      fi
+      TARGET_HUDI_VERSION="$2"
+      shift 2
+    ;;
     -h|--help)
       usage
       ;;
@@ -89,11 +99,19 @@ esac
 echo "======================================"
 echo "🚀 Starting Hudi Benchmark"
 echo "--------------------------------------"
-echo "Table Type : $TABLE_TYPE"
-echo "Data Path  : $BENCH_DATA_PATH"
-echo "Spark Home : $SPARK_HOME"
-echo "Script     : $PY_SCRIPT"
+echo "Hudi Version  : $TARGET_HUDI_VERSION"
+echo "Table Type    : $TABLE_TYPE"
+echo "Data Path     : $BENCH_DATA_PATH"
+echo "Spark Home    : $SPARK_HOME"
+echo "Script Path   : $PY_SCRIPT"
 echo "======================================"
+
+HUDI_BENCH_JARS=${HUDI_JARS}
+if [ "$TARGET_HUDI_VERSION" != "$HUDI_VERSION" ]; then 
+  HUDI_BENCH_JARS="${JARS_PATH}/hudi-spark${SPARK_MAJOR_VERSION}-bundle_${SCALA_VERSION}-${TARGET_HUDI_VERSION}.jar,${JARS_PATH}/hudi-utilities-slim-bundle_${SCALA_VERSION}-${TARGET_HUDI_VERSION}.jar"
+fi
+
+echo "HUDI_BENCH_JARS: $HUDI_BENCH_JARS"
 
 ############################################
 # Run Spark Job
@@ -103,7 +121,7 @@ echo "======================================"
   --master yarn \
   --deploy-mode client \
   --properties-file "${SPARK_DEFAULTS_CONF}" \
-  --jars "$HUDI_JARS" \
+  --jars "$HUDI_BENCH_JARS" \
   --conf "spark.serializer=org.apache.spark.serializer.KryoSerializer" \
   --conf "spark.sql.catalog.spark_catalog=org.apache.spark.sql.hudi.catalog.HoodieCatalog" \
   --conf "spark.sql.extensions=org.apache.spark.sql.hudi.HoodieSparkSessionExtension" \
