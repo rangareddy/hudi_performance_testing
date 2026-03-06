@@ -108,13 +108,8 @@ echo "Spark Home    : $SPARK_HOME"
 echo "Script Path   : $PY_SCRIPT"
 echo "======================================"
 
-HUDI_JARS_BENCH="${JARS_PATH}/hudi-spark${SPARK_MAJOR_VERSION}-bundle_${SCALA_VERSION}-${TARGET_HUDI_VERSION}.jar"
-
-if [ -z "${AWS_S3_JARS:-}" ]; then
-  AWS_S3_JARS="${SPARK_HOME}/jars/aws-java-sdk-bundle.jar,${SPARK_HOME}/jars/hadoop-aws.jar"
-fi 
-
-echo "Hudi Benchmark Jars: $HUDI_JARS_BENCH, AWS S3 JARS: $AWS_S3_JARS"
+export HUDI_SPARK_BUNDLE_JAR="${JARS_PATH}/hudi-spark${SPARK_MAJOR_VERSION}-bundle_${SCALA_VERSION}-${TARGET_HUDI_VERSION}.jar"
+echo "Hudi Spark Bundle Jar: $HUDI_SPARK_BUNDLE_JAR"
 
 ############################################
 # Run Spark Job
@@ -124,7 +119,7 @@ echo "Hudi Benchmark Jars: $HUDI_JARS_BENCH, AWS S3 JARS: $AWS_S3_JARS"
   --master yarn \
   --deploy-mode client \
   --properties-file "${SPARK_DEFAULTS_CONF}" \
-  --jars "$HUDI_JARS_BENCH,$AWS_S3_JARS" \
+  --jars "$HUDI_SPARK_BUNDLE_JAR,$AWS_S3_JARS" \
   --conf "spark.serializer=org.apache.spark.serializer.KryoSerializer" \
   --conf "spark.sql.catalog.spark_catalog=org.apache.spark.sql.hudi.catalog.HoodieCatalog" \
   --conf "spark.sql.extensions=org.apache.spark.sql.hudi.HoodieSparkSessionExtension" \

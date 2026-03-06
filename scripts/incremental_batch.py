@@ -9,16 +9,19 @@ import os
 from pyspark.sql import SparkSession
 from pyspark.sql.functions import col
 
+batch_id = os.environ.get("BATCH_ID", "1")
+print(f"Batch ID: {batch_id}")
+
 # Create Spark session (for EMR, no need to specify master)
 spark = SparkSession.builder \
-    .appName("WideTimestampExample-IncrementalBatch1") \
+    .appName(f"IncrementalBatch_{batch_id}") \
     .getOrCreate()
 
 # Data path from env (set by shell from common.properties)
-data_path = os.environ.get(
-    "SOURCE_DATA",
-    "s3://performance-benchmark-datasets-us-west-2/hudi-bench/performance/logical_ts_perf/data/wide_500cols_10000parts"
-)
+data_path = os.environ.get("TARGET_DATA")
+if data_path is None:
+    print("❌ TARGET_DATA not found in environment")
+    exit(1)
 
 print(f"🚀 Starting incremental batch...")
 print(f"📍 Reading from: {data_path}")

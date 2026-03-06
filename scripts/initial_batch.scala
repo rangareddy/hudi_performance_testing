@@ -8,11 +8,11 @@ import java.time.temporal.ChronoUnit
 import java.sql.Timestamp
 
 // Get batch ID from JVM property (for spark-shell -i compatibility)
-val batchId: Int = sys.props.get("batchId").map(_.toInt).getOrElse(1)
+val batchId: Int = sys.props.get("BATCH_ID").map(_.toInt).getOrElse(1)
 
 // Create Spark session (for EMR, no need to specify master)
 val spark = SparkSession.builder()
-  .appName("WideTimestampExample-InitialBatch")
+  .appName("TimestampExample-InitialBatch")
   .getOrCreate()
 
 import spark.implicits._
@@ -26,7 +26,7 @@ val baseTime = LocalDateTime.now().truncatedTo(ChronoUnit.MILLIS)
 val zone = java.time.ZoneId.systemDefault()
 
 // S3 output path (set by run_initial_ingestion.sh from common.properties)
-val outputPath = sys.env.getOrElse("SOURCE_DATA", "s3://performance-benchmark-datasets-us-west-2/hudi-bench/performance/logical_ts_perf/data/wide_500cols_10000parts")
+val outputPath = sys.env.getOrElse("TARGET_DATA", "s3://performance-benchmark-datasets-us-west-2/hudi-bench/performance/logical_ts_perf/data/wide_500cols_10000parts")
 
 // Helper functions
 def toTimestamp(local: LocalDateTime): Timestamp = Timestamp.valueOf(local)

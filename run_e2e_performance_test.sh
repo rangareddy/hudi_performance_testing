@@ -120,7 +120,7 @@ run_step "Step 1/9: Initial parquet ingestion" \
 # 2. Hudi ingestion (initial load)
 # ---------------------------------------------------------------------------
 run_step "Step 2/9: Hudi ingestion (initial load)" \
-  bash "${SCRIPT_DIR}/run_hudi_ingestion.sh" --table-type "$TABLE_TYPE" --target-hudi-version "$TARGET_HUDI_VERSION"
+  bash "${SCRIPT_DIR}/run_hudi_ingestion.sh" --table-type "$TABLE_TYPE" --target-hudi-version "$SOURCE_HUDI_VERSION"
 
 # ---------------------------------------------------------------------------
 # 3. Benchmark (after initial load)
@@ -155,4 +155,5 @@ run_step "Step 9/9: Benchmark (after incremental batch 2)" \
 echo ""
 echo "=============================================="
 echo "  ✅ E2E performance test completed"
+echo "Report available at: ${SCRIPT_DIR}/hudi_benchmark_results.csv"
 echo "=============================================="

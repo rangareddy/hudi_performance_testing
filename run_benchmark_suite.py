@@ -26,13 +26,14 @@ from typing import Any, Dict, List, Optional, Tuple
 
 # Default combinations (align with common.properties: SOURCE_HUDI_VERSION, TARGET_HUDI_VERSION)
 DEFAULT_TABLE_TYPES = ["COPY_ON_WRITE", "MERGE_ON_READ"]
-DEFAULT_HUDI_VERSIONS = ["0.14.1", "0.14.2-SNAPSHOT"]
+DEFAULT_HUDI_VERSIONS = ["0.14.1", "0.14.2"]
 SEQUENCE_FILENAME = "benchmark_run_sequence.txt"
 DEFAULT_CSV = "hudi_benchmark_results.csv"
 CSV_HEADER = [
     "run_sequence",
     "table_type",
     "hudi_version",
+    "batch_id",
     "execution_time_seconds",
     "count",
     "run_timestamp_utc",
@@ -104,6 +105,12 @@ def run_benchmark(table_type: str, hudi_version: str) -> Tuple[Optional[float], 
 
     return exec_time, count, status
 
+def get_batch_id() -> int:
+    if os.path.exists(SCRIPT_DIR / "incremental_batch_id.txt"):
+        with open(SCRIPT_DIR / "incremental_batch_id.txt", "r") as f:
+            return int(f.read().strip())
+    else:
+        return 0
 
 def main() -> int:
     parser = argparse.ArgumentParser(
@@ -120,7 +127,7 @@ def main() -> int:
         "--hudi-versions",
         type=str,
         default=",".join(DEFAULT_HUDI_VERSIONS),
-        help="Comma-separated Hudi versions, e.g. 0.14.1,0.14.2-SNAPSHOT (default matches common.properties).",
+        help="Comma-separated Hudi versions, e.g. 0.14.1,0.14.2 (default matches common.properties).",
     )
     parser.add_argument(
         "--output",
@@ -147,7 +154,7 @@ def main() -> int:
 
     run_sequence = read_and_increment_sequence()
     run_ts = datetime.now(timezone.utc).isoformat()[:19].replace("T", " ")
-
+    batch_id = get_batch_id()
     output_path = Path(args.output)
     if not output_path.is_absolute():
         output_path = SCRIPT_DIR / output_path
@@ -171,6 +178,7 @@ def main() -> int:
             "run_sequence": run_sequence,
             "table_type": args.table_type,
             "hudi_version": hudi_version,
+            "batch_id": batch_id,
             "execution_time_seconds": exec_time if exec_time is not None else "",
             "count": count if count is not None else "",
             "run_timestamp_utc": run_ts,
