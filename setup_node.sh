@@ -14,14 +14,14 @@ source "${SCRIPT_DIR}/load_config.sh"
 echo "======================================"
 echo "Hudi logical_ts_perf node setup"
 echo "--------------------------------------"
-echo "BASE_PATH            : ${BASE_PATH}"
-echo "JARS_PATH            : ${JARS_PATH}"
-echo "DEST_SCRIPTS_DIR     : ${DEST_SCRIPTS_DIR}"
 echo "SOURCE_HUDI_VERSION  : ${SOURCE_HUDI_VERSION}"
 echo "TARGET_HUDI_VERSION  : ${TARGET_HUDI_VERSION}"
 echo "HUDI_VERSION         : ${HUDI_VERSION}"
 echo "SPARK_VERSION        : ${SPARK_VERSION}"
-echo "DEST_DIR             : ${DEST_DIR}"
+echo "BASE_PATH            : ${BASE_PATH}"
+echo "JARS_PATH            : ${JARS_PATH}"
+echo "DATA_PATH            : ${DATA_PATH}"
+echo "SCRIPTS_DIR          : ${SCRIPTS_DIR}"
 echo "======================================"
 
 if [[ ! -d "$SPARK_HOME" ]]; then
@@ -42,4 +42,4 @@ if [[ ! -d "$SPARK_HOME" ]]; then
   ln -sf "$SPARK_HOME/jars/aws-java-sdk-bundle-1.12.262.jar" "$SPARK_HOME/jars/aws-java-sdk-bundle.jar"
 fi
 
-echo "✅ Node setup complete. Scripts in $DEST_SCRIPTS_DIR, Spark in $SPARK_HOME"
+echo "✅ Node setup complete."

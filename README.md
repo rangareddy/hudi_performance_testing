@@ -16,7 +16,7 @@
 All paths and versions are defined in **`common.properties`** at the project root. Edit this file to change:
 
 - `SPARK_HOME`, `BASE_PATH`, `JARS_PATH`, `DATA_PATH`, `SOURCE_DATA`
-- `DEST_DIR`, `DEST_SCRIPTS_DIR`
+- `DEST_DIR`, `SCRIPTS_DIR`
 - `SOURCE_HUDI_VERSION`, `TARGET_HUDI_VERSION`, `HUDI_VERSION` (defaults to `TARGET_HUDI_VERSION`)
 - `SPARK_VERSION`, `SCALA_VERSION`, `HADOOP_VERSION`
 - Script paths: `INITIAL_BATCH_SCALA`, `INCREMENTAL_SCRIPT`, `PY_SCRIPT`, `SCHEMA_FILE`, `PROPS_FILE`, `SPARK_DEFAULTS_CONF`
