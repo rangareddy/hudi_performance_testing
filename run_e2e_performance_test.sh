@@ -234,6 +234,7 @@ for ((BATCH_ID=0; BATCH_ID<total_batches; BATCH_ID++)); do
     python3 "${SCRIPT_DIR}/run_benchmark_suite.py" \
       --table-type "$TABLE_TYPE" \
       --hudi-versions "$HUDI_VERSIONS"
+      --batch-id $BATCH_ID
 
     echo "---------------------------------------"
     echo "Batch $BATCH_ID processing completed"

@@ -14,11 +14,14 @@ source "${SCRIPT_DIR}/load_config.sh"
 usage() {
   echo ""
   echo "Usage:"
-  echo "  bash $SCRIPT_NAME --table-type <COPY_ON_WRITE|MERGE_ON_READ> --target-hudi-version <0.14.1|0.14.2>"
+  echo "  bash $SCRIPT_NAME --table-type <COPY_ON_WRITE|MERGE_ON_READ> --target-hudi-version <0.14.1|0.14.2> [--batch-id <id>]"
+  echo ""
+  echo "Options:"
+  echo "  --batch-id    (optional) Ingest only parquet under SOURCE_DATA/batch_<id>; if omitted, use SOURCE_DATA as root."
   echo ""
   echo "Examples:"
   echo "  bash $SCRIPT_NAME --table-type COPY_ON_WRITE --target-hudi-version 0.14.1"
-  echo "  bash $SCRIPT_NAME --table-type MERGE_ON_READ --target-hudi-version 0.14.2"
+  echo "  bash $SCRIPT_NAME --table-type MERGE_ON_READ --target-hudi-version 0.14.2 --batch-id 1"
   echo ""
   exit 1
 }
@@ -30,6 +33,7 @@ if [[ -n "$SCHEMA_FILE_ARG" && "$SCHEMA_FILE_ARG" != file://* && "$SCHEMA_FILE_A
 fi
 
 TARGET_HUDI_VERSION="$HUDI_VERSION"
+BATCH_ID_ARG=""
 
 while [[ $# -gt 0 ]]; do
   case $1 in
@@ -47,6 +51,14 @@ while [[ $# -gt 0 ]]; do
         usage
       fi
       TARGET_HUDI_VERSION="$2"
+      shift 2
+      ;;
+    --batch-id)
+      if [[ -z "$2" ]]; then
+        echo "❌ Error: --batch-id requires a value"
+        usage
+      fi
+      BATCH_ID_ARG="$2"
       shift 2
       ;;
     -h|--help)
@@ -85,6 +97,13 @@ esac
 
 TABLE_BASE_PATH="${DATA_PATH}/${TABLE_NAME}"
 
+# Source path for streamer: one batch or full SOURCE_DATA
+if [[ -n "$BATCH_ID_ARG" ]]; then
+  STREAMER_SOURCE_ROOT="${SOURCE_DATA}/batch_${BATCH_ID_ARG}"
+else
+  STREAMER_SOURCE_ROOT="${SOURCE_DATA}"
+fi
+
 # Always set JARs for the target Hudi version (for --jars and for application JAR containing HoodieStreamer)
 HUDI_UTILITIES_JAR="${JARS_PATH}/hudi-utilities-slim-bundle_${SCALA_VERSION}-${TARGET_HUDI_VERSION}.jar"
 HUDI_SPARK_JAR="${JARS_PATH}/hudi-spark${SPARK_MAJOR_VERSION}-bundle_${SCALA_VERSION}-${TARGET_HUDI_VERSION}.jar"
@@ -98,6 +117,7 @@ echo "TABLE_TYPE      : $TABLE_TYPE"
 echo "TABLE_NAME      : $TABLE_NAME"
 echo "TABLE_BASE_PATH : $TABLE_BASE_PATH"
 echo "SOURCE_DATA     : $SOURCE_DATA"
+echo "Streamer root   : $STREAMER_SOURCE_ROOT"
 echo "HUDI_JARS       : $HUDI_JARS"
 echo "======================================"
 
@@ -128,7 +148,7 @@ echo "spark-submit command: $SPARK_HOME/bin/spark-submit \
   --source-class org.apache.hudi.utilities.sources.ParquetDFSSource \
   --schemaprovider-class org.apache.hudi.utilities.schema.FilebasedSchemaProvider \
   --source-ordering-field col_1 \
-  --hoodie-conf hoodie.streamer.source.dfs.root="${SOURCE_DATA}" \
+  --hoodie-conf hoodie.streamer.source.dfs.root="${STREAMER_SOURCE_ROOT}" \
   --hoodie-conf hoodie.streamer.schemaprovider.source.schema.file="$SCHEMA_FILE_ARG" \
   --hoodie-conf hoodie.streamer.schemaprovider.target.schema.file="$SCHEMA_FILE_ARG" \
   --hoodie-conf hoodie.datasource.write.recordkey.field=col_1 \
@@ -161,7 +181,7 @@ time "${SPARK_HOME}/bin/spark-submit" \
   --source-class org.apache.hudi.utilities.sources.ParquetDFSSource \
   --schemaprovider-class org.apache.hudi.utilities.schema.FilebasedSchemaProvider \
   --source-ordering-field col_1 \
-  --hoodie-conf hoodie.streamer.source.dfs.root="${SOURCE_DATA}" \
+  --hoodie-conf hoodie.streamer.source.dfs.root="${STREAMER_SOURCE_ROOT}" \
   --hoodie-conf hoodie.streamer.schemaprovider.source.schema.file="$SCHEMA_FILE_ARG" \
   --hoodie-conf hoodie.streamer.schemaprovider.target.schema.file="$SCHEMA_FILE_ARG" \
   --hoodie-conf hoodie.datasource.write.recordkey.field=col_1 \

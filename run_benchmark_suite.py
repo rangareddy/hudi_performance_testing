@@ -55,7 +55,7 @@ def read_and_increment_sequence() -> int:
     return n
 
 
-def run_benchmark(table_type: str, hudi_version: str) -> Tuple[Optional[float], Optional[int], str]:
+def run_benchmark(table_type: str, hudi_version: str, batch_id: int) -> Tuple[Optional[float], Optional[int], str]:
     """
     Run run_hudi_benchmark.sh and parse output.
     Returns (execution_time_seconds, count, status).
@@ -70,6 +70,7 @@ def run_benchmark(table_type: str, hudi_version: str) -> Tuple[Optional[float], 
         str(script),
         "--table-type", table_type,
         "--target-hudi-version", hudi_version,
+        "--batch-id", str(batch_id),
     ]
     print("Running the command: ", " ".join(cmd))
     try:
@@ -105,13 +106,6 @@ def run_benchmark(table_type: str, hudi_version: str) -> Tuple[Optional[float], 
 
     return exec_time, count, status
 
-def get_batch_id() -> int:
-    if os.path.exists(SCRIPT_DIR / "incremental_batch_id.txt"):
-        with open(SCRIPT_DIR / "incremental_batch_id.txt", "r") as f:
-            return int(f.read().strip())
-    else:
-        return 0
-
 def main() -> int:
     parser = argparse.ArgumentParser(
         description="Run Hudi benchmarks for multiple table types and versions, write results to CSV with run sequence.",
@@ -128,6 +122,12 @@ def main() -> int:
         type=str,
         default=",".join(DEFAULT_HUDI_VERSIONS),
         help="Comma-separated Hudi versions, e.g. 0.14.1,0.14.2 (default matches common.properties).",
+    )
+    parser.add_argument(
+        "--batch-id",
+        type=int,
+        default=0,
+        help="Batch ID (default 0).",
     )
     parser.add_argument(
         "--output",
@@ -154,7 +154,7 @@ def main() -> int:
 
     run_sequence = read_and_increment_sequence()
     run_ts = datetime.now(timezone.utc).isoformat()[:19].replace("T", " ")
-    batch_id = get_batch_id()
+    batch_id = args.batch_id
     output_path = Path(args.output)
     if not output_path.is_absolute():
         output_path = SCRIPT_DIR / output_path
@@ -166,6 +166,7 @@ def main() -> int:
         print(f"Table type: {args.table_type}")
         print(f"Hudi versions: {hudi_versions}")
         print(f"Output CSV: {output_path}")
+        print(f"Batch ID: {batch_id}")
         for hv in hudi_versions:
             print(f"  Would run: run_hudi_benchmark.sh --table-type {args.table_type} --target-hudi-version {hv}")
         return 0
@@ -173,7 +174,7 @@ def main() -> int:
     rows = []  # type: List[Dict[str, Any]]
     for hudi_version in hudi_versions:
         print(f"[Run #{run_sequence}] {args.table_type} @ {hudi_version} ...", flush=True)
-        exec_time, count, status = run_benchmark(args.table_type, hudi_version)
+        exec_time, count, status = run_benchmark(args.table_type, hudi_version, batch_id)
         row = {
             "run_sequence": run_sequence,
             "table_type": args.table_type,
