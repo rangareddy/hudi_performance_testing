@@ -88,7 +88,7 @@ TABLE_BASE_PATH="${DATA_PATH}/${TABLE_NAME}"
 # Always set JARs for the target Hudi version (for --jars and for application JAR containing HoodieStreamer)
 HUDI_UTILITIES_JAR="${JARS_PATH}/hudi-utilities-slim-bundle_${SCALA_VERSION}-${TARGET_HUDI_VERSION}.jar"
 HUDI_SPARK_JAR="${JARS_PATH}/hudi-spark${SPARK_MAJOR_VERSION}-bundle_${SCALA_VERSION}-${TARGET_HUDI_VERSION}.jar"
-HUDI_JARS_DELTA="${HUDI_SPARK_JAR},${HUDI_UTILITIES_JAR}" 
+HUDI_JARS="${HUDI_SPARK_JAR},${HUDI_UTILITIES_JAR}" 
 
 echo "======================================"
 echo "Running Delta Streamer"
@@ -98,7 +98,7 @@ echo "TABLE_TYPE      : $TABLE_TYPE"
 echo "TABLE_NAME      : $TABLE_NAME"
 echo "TABLE_BASE_PATH : $TABLE_BASE_PATH"
 echo "SOURCE_DATA     : $SOURCE_DATA"
-echo "HUDI_JARS_DELTA : $HUDI_JARS_DELTA"
+echo "HUDI_JARS       : $HUDI_JARS"
 echo "======================================"
 
 # print the spark-submit command
@@ -107,7 +107,7 @@ echo "--------------------------------------------------------------------------
 echo "spark-submit command: $SPARK_HOME/bin/spark-submit \
   --master yarn \
   --deploy-mode client \
-  --jars "$HUDI_JARS_DELTA" \
+  --jars "$HUDI_JARS" \
   --properties-file "${SPARK_DEFAULTS_CONF}" \
   --conf spark.dynamicAllocation.enabled=true \
   --conf spark.sql.adaptive.enabled=true \
@@ -140,7 +140,7 @@ echo ""
 time "${SPARK_HOME}/bin/spark-submit" \
   --master yarn \
   --deploy-mode client \
-  --jars "$HUDI_JARS_DELTA" \
+  --jars "$HUDI_JARS" \
   --properties-file "${SPARK_DEFAULTS_CONF}" \
   --conf spark.dynamicAllocation.enabled=true \
   --conf spark.sql.adaptive.enabled=true \
