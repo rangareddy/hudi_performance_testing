@@ -10,9 +10,8 @@ from pyspark.sql import SparkSession
 from pyspark.sql.functions import col
 
 batch_id = os.environ.get("BATCH_ID", "1")
-print(f"Batch ID: {batch_id}")
 
-# Create Spark session (for EMR, no need to specify master)
+# Create Spark session
 spark = SparkSession.builder \
     .appName(f"IncrementalBatch_{batch_id}") \
     .getOrCreate()
@@ -24,8 +23,9 @@ if source_data_path is None:
     print("❌ SOURCE_DATA not found in environment")
     exit(1)
 
-print(f"🚀 Starting incremental batch...")
+print(f"🚀 Starting incremental batch {batch_id}...")
 print(f"📍 Reading from: {source_data_path}")
+print(f"📍 Writing to: {target_data_path}")
 
 # Read the existing parquet data
 df = spark.read.parquet(source_data_path)
