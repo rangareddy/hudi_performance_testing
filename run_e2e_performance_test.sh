@@ -92,9 +92,19 @@ case "$TABLE_TYPE_UPPER" in
 esac
 
 # State file per table type (avoid duplicate runs; retry only on failure)
+TARGET_VERSION=$(echo "$TARGET_HUDI_VERSION" | cut -d '.' -f 1,2 | tr -d '.')
+TABLE_TYPE_LOWER=$(echo "$TABLE_TYPE" | tr '[:upper:]' '[:lower:]')
 E2E_STATE_DIR="${SCRIPT_DIR}/.e2e_state"
-E2E_STATE_FILE="${E2E_STATE_DIR}/state_${TABLE_TYPE}.txt"
+E2E_STATE_FILE="${E2E_STATE_DIR}/state_${TABLE_TYPE_LOWER}_v${TARGET_VERSION}.txt"
+S3_STATE_FILE="${BASE_PATH}/e2e_state/state_${TABLE_TYPE_LOWER}_v${TARGET_VERSION}.txt"
+S3_CSV_FILE="${BASE_PATH}/hudi_benchmark_results.csv"
 mkdir -p "$E2E_STATE_DIR"
+
+# If state file exists on S3, download to local so we resume from last run
+if aws s3 ls "$S3_STATE_FILE" &>/dev/null; then
+  echo "Downloading existing state from S3: $S3_STATE_FILE"
+  aws s3 cp "$S3_STATE_FILE" "$E2E_STATE_FILE" || true
+fi
 
 echo "=============================================="
 echo "  E2E Hudi Performance Test"
@@ -210,6 +220,19 @@ run_step "step8_incr2_hudi" "Step 8/9: Incremental batch 2 - Hudi ingestion" \
 
 run_step "step9_benchmark_incr2" "Step 9/9: Benchmark - after incremental batch 2" \
   python3 "${SCRIPT_DIR}/run_benchmark_suite.py" --table-type "$TABLE_TYPE" --hudi-versions "$HUDI_VERSIONS"
+
+# Upload results and state to S3 (if files exist)
+if [[ "$DRY_RUN" != true ]]; then
+  if [[ -f "${SCRIPT_DIR}/hudi_benchmark_results.csv" ]]; then
+    echo ""
+    echo "Uploading hudi_benchmark_results.csv to S3: $S3_CSV_FILE"
+    aws s3 cp "${SCRIPT_DIR}/hudi_benchmark_results.csv" "$S3_CSV_FILE" || true
+  fi
+  if [[ -f "$E2E_STATE_FILE" ]]; then
+    echo "Uploading E2E state to S3: $S3_STATE_FILE"
+    aws s3 cp "$E2E_STATE_FILE" "$S3_STATE_FILE" || true
+  fi
+fi
 
 echo ""
 echo "=============================================="
