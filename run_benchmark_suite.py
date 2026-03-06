@@ -21,6 +21,7 @@ import subprocess
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
+from typing import Any, Dict, List, Optional, Tuple
 
 
 # Default combinations (matches README)
@@ -37,22 +38,7 @@ CSV_HEADER = [
     "run_timestamp_utc",
     "status",
 ]
-
-
-def get_project_dir(project_dir: str | None) -> Path:
-    """Project root where test_hudi_benchmark.sh and load_config.sh live."""
-    if project_dir:
-        p = Path(project_dir).resolve()
-        if not p.is_dir():
-            raise FileNotFoundError(f"Project dir not found: {p}")
-        return p
-    # Assume script is in project root or in a subdir
-    script_path = Path(__file__).resolve()
-    for d in [script_path.parent, Path.cwd()]:
-        if (d / "test_hudi_benchmark.sh").exists() and (d / "load_config.sh").exists():
-            return d
-    return Path.cwd()
-
+SCRIPT_DIR = Path(os.path.dirname(os.path.abspath(__file__)))
 
 def read_and_increment_sequence(project_dir: Path) -> int:
     """Read current sequence from file, increment, write back, return new value."""
@@ -68,7 +54,7 @@ def read_and_increment_sequence(project_dir: Path) -> int:
     return n
 
 
-def run_benchmark(project_dir: Path, table_type: str, hudi_version: str) -> tuple[float | None, int | None, str]:
+def run_benchmark(project_dir: Path, table_type: str, hudi_version: str) -> Tuple[Optional[float], Optional[int], str]:
     """
     Run test_hudi_benchmark.sh and parse output.
     Returns (execution_time_seconds, count, status).
@@ -84,6 +70,7 @@ def run_benchmark(project_dir: Path, table_type: str, hudi_version: str) -> tupl
         "--table-type", table_type,
         "--target-hudi-version", hudi_version,
     ]
+    print("Running the command: ", " ".join(cmd))
     try:
         result = subprocess.run(
             cmd,
@@ -97,6 +84,9 @@ def run_benchmark(project_dir: Path, table_type: str, hudi_version: str) -> tupl
         return None, None, "timeout"
     except Exception as e:
         return None, None, str(e)
+
+    print("Command output: ", out)
+    print("Command return code: ", result.returncode)
 
     # Parse: "Total execution time: 12.34 seconds" and "Execution Complete. Count: 12345"
     time_match = re.search(r"Total execution time:\s*([\d.]+)\s*seconds", out)
@@ -121,16 +111,10 @@ def main() -> int:
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
     )
     parser.add_argument(
-        "--project-dir",
+        "--table-type",
         type=str,
-        default=None,
-        help="Project root (where test_hudi_benchmark.sh and load_config.sh are). Default: auto-detect or cwd.",
-    )
-    parser.add_argument(
-        "--table-types",
-        type=str,
-        default=",".join(DEFAULT_TABLE_TYPES),
-        help="Comma-separated table types, e.g. COPY_ON_WRITE,MERGE_ON_READ",
+        default="COPY_ON_WRITE",
+        help="Table type, e.g. COPY_ON_WRITE,MERGE_ON_READ",
     )
     parser.add_argument(
         "--hudi-versions",
@@ -140,9 +124,8 @@ def main() -> int:
     )
     parser.add_argument(
         "--output",
-        "-o",
         type=str,
-        default=DEFAULT_CSV,
+        default=str(SCRIPT_DIR / DEFAULT_CSV),
         help="Output CSV path (created or appended).",
     )
     parser.add_argument(
@@ -150,56 +133,55 @@ def main() -> int:
         action="store_true",
         help="Only print what would be run and exit.",
     )
-    args = parser.parse_args()
 
-    project_dir = get_project_dir(args.project_dir)
-    table_types = [t.strip().upper() for t in args.table_types.split(",") if t.strip()]
+    args = parser.parse_args()
+    if not args.hudi_versions:
+        print("❌ Error: --hudi-versions is required", file=sys.stderr)
+        return 1
+
     hudi_versions = [v.strip() for v in args.hudi_versions.split(",") if v.strip()]
 
-    if not table_types or not hudi_versions:
+    if not args.table_type or not hudi_versions:
         print("Need at least one table type and one hudi version.", file=sys.stderr)
         return 1
 
-    run_sequence = read_and_increment_sequence(project_dir)
-    run_ts = datetime.now(timezone.utc).isoformat(timespec="seconds")
+    run_sequence = read_and_increment_sequence(SCRIPT_DIR)
+    run_ts = datetime.now(timezone.utc).isoformat()[:19].replace("T", " ")
 
     output_path = Path(args.output)
     if not output_path.is_absolute():
-        output_path = project_dir / output_path
+        output_path = SCRIPT_DIR / output_path
     output_path.parent.mkdir(parents=True, exist_ok=True)
     file_existed = output_path.exists()
 
     if args.dry_run:
-        print(f"Project dir: {project_dir}")
+        print(f"Project dir: {SCRIPT_DIR}")
         print(f"Run sequence: {run_sequence}")
-        print(f"Table types: {table_types}")
+        print(f"Table type: {args.table_type}")
         print(f"Hudi versions: {hudi_versions}")
         print(f"Output CSV: {output_path}")
-        for tt in table_types:
-            for hv in hudi_versions:
-                print(f"  Would run: test_hudi_benchmark.sh --table-type {tt} --target-hudi-version {hv}")
+        for hv in hudi_versions:
+            print(f"  Would run: test_hudi_benchmark.sh --table-type {args.table_type} --target-hudi-version {hv}")
         return 0
 
-    rows: list[dict[str, str | int | float | None]] = []
-
-    for table_type in table_types:
-        for hudi_version in hudi_versions:
-            print(f"[Run #{run_sequence}] {table_type} @ {hudi_version} ...", flush=True)
-            exec_time, count, status = run_benchmark(project_dir, table_type, hudi_version)
-            row = {
-                "run_sequence": run_sequence,
-                "table_type": table_type,
-                "hudi_version": hudi_version,
-                "execution_time_seconds": exec_time if exec_time is not None else "",
-                "count": count if count is not None else "",
-                "run_timestamp_utc": run_ts,
-                "status": status,
-            }
-            rows.append(row)
-            if exec_time is not None and count is not None:
-                print(f"  -> {exec_time:.2f}s, count={count}, status={status}")
-            else:
-                print(f"  -> status={status}")
+    rows = []  # type: List[Dict[str, Any]]
+    for hudi_version in hudi_versions:
+        print(f"[Run #{run_sequence}] {args.table_type} @ {hudi_version} ...", flush=True)
+        exec_time, count, status = run_benchmark(SCRIPT_DIR, args.table_type, hudi_version)
+        row = {
+            "run_sequence": run_sequence,
+            "table_type": args.table_type,
+            "hudi_version": hudi_version,
+            "execution_time_seconds": exec_time if exec_time is not None else "",
+            "count": count if count is not None else "",
+            "run_timestamp_utc": run_ts,
+            "status": status,
+        }
+        rows.append(row)
+        if exec_time is not None and count is not None:
+            print(f"  -> {exec_time:.2f}s, count={count}, status={status}")
+        else:
+            print(f"  -> status={status}")
 
     with open(output_path, "a", newline="") as f:
         w = csv.DictWriter(f, fieldnames=CSV_HEADER)

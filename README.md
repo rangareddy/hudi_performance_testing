@@ -152,7 +152,7 @@ Use `-h` or `--help` on any script for usage.
 Run all combinations and write to CSV with an incrementing run sequence:
 
 ```sh
-python run_benchmark_suite.py
+python run_benchmark_suite.py --table-types COPY_ON_WRITE --hudi-versions 0.14.1,0.14.2 --output $PWD/results.csv
 ```
 
 Options:
