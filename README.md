@@ -143,5 +143,24 @@ Data generation is shared: run **`run_ingestion_data_generator.sh --type initial
 | `run_ingestion_data_generator.sh` | Generate parquet data: `--type initial` or `--type incremental`. |
 | `run_hudi_ingestion.sh` | Run Hudi Streamer: `--table-type COPY_ON_WRITE \| MERGE_ON_READ` and `--target-hudi-version 0.14.1 \| 0.14.2`. |
 | `test_hudi_benchmark.sh` | Read benchmark: `--table-type COPY_ON_WRITE \| MERGE_ON_READ` and `--target-hudi-version 0.14.1 \| 0.14.2`. |
+| `run_benchmark_suite.py` | Run benchmarks for multiple table types and Hudi versions (e.g. COW+MOR × 0.14.1+0.14.2), append results to CSV with a run sequence number. |
 
 Use `-h` or `--help` on any script for usage.
+
+### Benchmark suite (Python)
+
+Run all combinations and write to CSV with an incrementing run sequence:
+
+```sh
+python run_benchmark_suite.py
+```
+
+Options:
+
+- `--table-types COPY_ON_WRITE,MERGE_ON_READ` (default: both)
+- `--hudi-versions 0.14.1,0.14.2` (default: both)
+- `--output hudi_benchmark_results.csv` (default CSV name)
+- `--project-dir /path/to/project` (default: auto-detect)
+- `--dry-run` — print planned runs only
+
+The first run creates `hudi_benchmark_results.csv` and `benchmark_run_sequence.txt` (set to 1). Each later run increments the sequence and appends one row per (table_type, hudi_version) to the CSV. CSV columns: `run_sequence`, `table_type`, `hudi_version`, `execution_time_seconds`, `count`, `run_timestamp_utc`, `status`.
