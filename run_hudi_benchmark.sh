@@ -82,6 +82,9 @@ fi
 
 TABLE_TYPE_UPPER=$(echo "$TABLE_TYPE_ARG" | tr '[:lower:]' '[:upper:]')
 
+# Append Hudi version to table name (e.g. 0.14.1 -> 0_14)
+HUDI_VERSION_SUFFIX=$(echo "$TARGET_HUDI_VERSION" | sed 's/-.*//' | cut -d. -f1,2 | tr '.' '_')
+
 ############################################
 # Validate Table Type and set DATA_PATH for benchmark
 ############################################
@@ -89,11 +92,11 @@ TABLE_TYPE_UPPER=$(echo "$TABLE_TYPE_ARG" | tr '[:lower:]' '[:upper:]')
 case "$TABLE_TYPE_UPPER" in
   COPY_ON_WRITE|COW)
     TABLE_TYPE="COPY_ON_WRITE"
-    TABLE_NAME="${BASE_TABLE_NAME}_cow"
+    TABLE_NAME="${BASE_TABLE_NAME}_cow_${HUDI_VERSION_SUFFIX}"
     ;;
   MERGE_ON_READ|MOR)
     TABLE_TYPE="MERGE_ON_READ"
-    TABLE_NAME="${BASE_TABLE_NAME}_mor"
+    TABLE_NAME="${BASE_TABLE_NAME}_mor_${HUDI_VERSION_SUFFIX}"
     ;;
   *)
     echo "❌ Invalid TABLE_TYPE: $TABLE_TYPE_ARG"

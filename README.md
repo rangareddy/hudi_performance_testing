@@ -20,7 +20,7 @@ Key settings:
 - **Versions:** `SOURCE_HUDI_VERSION`, `TARGET_HUDI_VERSION`, `HUDI_VERSION`, `HUDI_VERSIONS`, `SPARK_VERSION`, `SCALA_VERSION`, `HADOOP_VERSION`
 - **Paths:** `SPARK_HOME`, `BASE_PATH`, `JARS_PATH`, `DATA_PATH`, `SOURCE_DATA`, `DEST_DIR`, `SCRIPTS_DIR`
 - **Script/config paths:** `INITIAL_BATCH_SCALA`, `INCREMENTAL_SCRIPT`, `PY_SCRIPT`, `SCHEMA_FILE`, `PROPS_FILE`, `SPARK_DEFAULTS_CONF`
-- **Table:** `BASE_TABLE_NAME`
+- **Table:** `BASE_TABLE_NAME`. The actual table name used by ingestion and benchmark scripts appends table type and Hudi version (e.g. `hudi_logical_cow_0_14` for COW with 0.14.x, `hudi_logical_mor_0_14` for MOR). Version is derived as major_minor (e.g. 0.14.1 → `0_14`).
 
 ---
 
