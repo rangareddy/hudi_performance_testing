@@ -46,11 +46,6 @@ load_config() {
   [[ -z "${SOURCE_DATA:-}" && -n "${DATA_PATH:-}" ]] && export SOURCE_DATA="${DATA_PATH}/wide_500cols_10000parts"
   [[ -z "${BASE_DATA_PATH:-}" && -n "${DATA_PATH:-}" ]] && export BASE_DATA_PATH="${DATA_PATH}"
 
-  # Hudi jars for benchmark (spark-submit read benchmark)
-  if [[ -z "${HUDI_JARS:-}" && -n "${JARS_PATH:-}" && -n "${HUDI_VERSION:-}" && -n "${SPARK_MAJOR_VERSION:-}" && -n "${SCALA_VERSION:-}" ]]; then
-    export HUDI_JARS="${JARS_PATH}/hudi-spark${SPARK_MAJOR_VERSION}-bundle_${SCALA_VERSION}-${HUDI_VERSION}.jar,${JARS_PATH}/hudi-utilities-slim-bundle_${SCALA_VERSION}-${HUDI_VERSION}.jar"
-  fi
-
   # Delta Streamer --props must be file:// URL when using local path
   if [[ -n "${PROPS_FILE:-}" && "$PROPS_FILE" != file://* && "$PROPS_FILE" != s3:* ]]; then
     export PROPS_FILE="file://${PROPS_FILE}"
