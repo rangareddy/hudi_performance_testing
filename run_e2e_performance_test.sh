@@ -203,44 +203,68 @@ fi
 # ---------------------------------------------------------------------------
 # 1. Initial parquet ingestion
 # ---------------------------------------------------------------------------
+BATCH_ID=0
 run_step "step1_initial_parquet" "Step 1/9: Initial parquet ingestion" \
-  bash "${SCRIPT_DIR}/run_parquet_ingestion.sh" --type initial --batch-id 0
+  bash "${SCRIPT_DIR}/run_parquet_ingestion.sh" \
+    --type initial \
+    --batch-id $BATCH_ID
 
 # ---------------------------------------------------------------------------
 # 2. Hudi ingestion (initial load)
 # ---------------------------------------------------------------------------
 run_step "step2_initial_hudi" "Step 2/9: Hudi ingestion - initial load" \
-  bash "${SCRIPT_DIR}/run_hudi_ingestion.sh" --table-type "$TABLE_TYPE" --target-hudi-version "$SOURCE_HUDI_VERSION"
+  bash "${SCRIPT_DIR}/run_hudi_ingestion.sh" \
+    --table-type "$TABLE_TYPE" \
+    --target-hudi-version "$SOURCE_HUDI_VERSION" \
+    --batch-id $BATCH_ID
 
 # ---------------------------------------------------------------------------
 # 3. Benchmark (after initial load)
 # ---------------------------------------------------------------------------
 run_step "step3_benchmark_initial" "Step 3/9: Benchmark - after initial load" \
-  python3 "${SCRIPT_DIR}/run_benchmark_suite.py" --table-type "$TABLE_TYPE" --hudi-versions "$HUDI_VERSIONS"
+  python3 "${SCRIPT_DIR}/run_benchmark_suite.py" \
+    --table-type "$TABLE_TYPE" \
+    --hudi-versions "$HUDI_VERSIONS"
 
 # ---------------------------------------------------------------------------
 # 4–5. First incremental cycle: generate data → Hudi ingestion → benchmark
 # ---------------------------------------------------------------------------
-run_step "step4_incr1_parquet" "Step 4/9: Incremental batch 1 - generate parquet data" \
-  bash "${SCRIPT_DIR}/run_parquet_ingestion.sh" --type incremental --batch-id 1
+BATCH_ID=1
+run_step "step4_incr${BATCH_ID}_parquet" "Step 4/9: Incremental batch $BATCH_ID - generate parquet data" \
+  bash "${SCRIPT_DIR}/run_parquet_ingestion.sh" \
+    --type incremental \
+    --batch-id $BATCH_ID
 
-run_step "step5_incr1_hudi" "Step 5/9: Incremental batch 1 - Hudi ingestion" \
-  bash "${SCRIPT_DIR}/run_hudi_ingestion.sh" --table-type "$TABLE_TYPE" --target-hudi-version "$TARGET_HUDI_VERSION"
+run_step "step5_incr${BATCH_ID}_hudi" "Step 5/9: Incremental batch $BATCH_ID - Hudi ingestion" \
+  bash "${SCRIPT_DIR}/run_hudi_ingestion.sh" \
+  --table-type "$TABLE_TYPE" \
+  --target-hudi-version "$TARGET_HUDI_VERSION" \
+  --batch-id $BATCH_ID
 
-run_step "step6_benchmark_incr1" "Step 6/9: Benchmark - after incremental batch 1" \
-  python3 "${SCRIPT_DIR}/run_benchmark_suite.py" --table-type "$TABLE_TYPE" --hudi-versions "$HUDI_VERSIONS"
+run_step "step6_benchmark_incr${BATCH_ID}" "Step 6/9: Benchmark - after incremental batch $BATCH_ID" \
+  python3 "${SCRIPT_DIR}/run_benchmark_suite.py" \
+    --table-type "$TABLE_TYPE" \
+    --hudi-versions "$HUDI_VERSIONS"
 
 # ---------------------------------------------------------------------------
 # 6–7. Second incremental cycle: generate data → Hudi ingestion → benchmark
 # ---------------------------------------------------------------------------
-run_step "step7_incr2_parquet" "Step 7/9: Incremental batch 2 - generate parquet data" \
-  bash "${SCRIPT_DIR}/run_parquet_ingestion.sh" --type incremental --batch-id 2
+BATCH_ID=2
+run_step "step7_incr${BATCH_ID}_parquet" "Step 7/9: Incremental batch $BATCH_ID - generate parquet data" \
+  bash "${SCRIPT_DIR}/run_parquet_ingestion.sh" \
+    --type incremental \
+    --batch-id $BATCH_ID
 
-run_step "step8_incr2_hudi" "Step 8/9: Incremental batch 2 - Hudi ingestion" \
-  bash "${SCRIPT_DIR}/run_hudi_ingestion.sh" --table-type "$TABLE_TYPE" --target-hudi-version "$TARGET_HUDI_VERSION"
+run_step "step8_incr${BATCH_ID}_hudi" "Step 8/9: Incremental batch $BATCH_ID - Hudi ingestion" \
+  bash "${SCRIPT_DIR}/run_hudi_ingestion.sh" \
+  --table-type "$TABLE_TYPE" \
+  --target-hudi-version "$TARGET_HUDI_VERSION" \
+  --batch-id $BATCH_ID
 
-run_step "step9_benchmark_incr2" "Step 9/9: Benchmark - after incremental batch 2" \
-  python3 "${SCRIPT_DIR}/run_benchmark_suite.py" --table-type "$TABLE_TYPE" --hudi-versions "$HUDI_VERSIONS"
+run_step "step9_benchmark_incr${BATCH_ID}" "Step 9/9: Benchmark - after incremental batch $BATCH_ID" \
+  python3 "${SCRIPT_DIR}/run_benchmark_suite.py" \
+    --table-type "$TABLE_TYPE" \
+    --hudi-versions "$HUDI_VERSIONS"
 
 # Upload results to S3 at end (state file already uploaded after each step)
 if [[ "$DRY_RUN" != true ]]; then
