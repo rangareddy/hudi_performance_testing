@@ -204,7 +204,7 @@ fi
 # 1. Initial parquet ingestion
 # ---------------------------------------------------------------------------
 run_step "step1_initial_parquet" "Step 1/9: Initial parquet ingestion" \
-  bash "${SCRIPT_DIR}/run_parquet_ingestion.sh" --type initial
+  bash "${SCRIPT_DIR}/run_parquet_ingestion.sh" --type initial --batch-id 0
 
 # ---------------------------------------------------------------------------
 # 2. Hudi ingestion (initial load)
@@ -222,7 +222,7 @@ run_step "step3_benchmark_initial" "Step 3/9: Benchmark - after initial load" \
 # 4–5. First incremental cycle: generate data → Hudi ingestion → benchmark
 # ---------------------------------------------------------------------------
 run_step "step4_incr1_parquet" "Step 4/9: Incremental batch 1 - generate parquet data" \
-  bash "${SCRIPT_DIR}/run_parquet_ingestion.sh" --type incremental
+  bash "${SCRIPT_DIR}/run_parquet_ingestion.sh" --type incremental --batch-id 1
 
 run_step "step5_incr1_hudi" "Step 5/9: Incremental batch 1 - Hudi ingestion" \
   bash "${SCRIPT_DIR}/run_hudi_ingestion.sh" --table-type "$TABLE_TYPE" --target-hudi-version "$TARGET_HUDI_VERSION"
@@ -234,7 +234,7 @@ run_step "step6_benchmark_incr1" "Step 6/9: Benchmark - after incremental batch 
 # 6–7. Second incremental cycle: generate data → Hudi ingestion → benchmark
 # ---------------------------------------------------------------------------
 run_step "step7_incr2_parquet" "Step 7/9: Incremental batch 2 - generate parquet data" \
-  bash "${SCRIPT_DIR}/run_parquet_ingestion.sh" --type incremental
+  bash "${SCRIPT_DIR}/run_parquet_ingestion.sh" --type incremental --batch-id 2
 
 run_step "step8_incr2_hudi" "Step 8/9: Incremental batch 2 - Hudi ingestion" \
   bash "${SCRIPT_DIR}/run_hudi_ingestion.sh" --table-type "$TABLE_TYPE" --target-hudi-version "$TARGET_HUDI_VERSION"
