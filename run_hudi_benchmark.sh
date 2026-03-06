@@ -19,7 +19,9 @@ SCRIPT_NAME="$0"
 usage() {
   echo ""
   echo "Usage:"
-  echo "  bash $SCRIPT_NAME --table-type <COPY_ON_WRITE|MERGE_ON_READ> --target-hudi-version <0.14.1|0.14.2>"
+  echo "  bash $SCRIPT_NAME --table-type <COPY_ON_WRITE|MERGE_ON_READ> --target-hudi-version <0.14.1|0.14.2> [--batch-id <id>]"
+  echo ""
+  echo "  --batch-id is optional (used by run_benchmark_suite.py for CSV labeling)."
   echo ""
   echo "Examples:"
   echo "  bash $SCRIPT_NAME --table-type COPY_ON_WRITE --target-hudi-version 0.14.1"
@@ -51,6 +53,14 @@ while [[ $# -gt 0 ]]; do
       TARGET_HUDI_VERSION="$2"
       shift 2
     ;;
+    --batch-id)
+      if [[ -z "${2:-}" ]]; then
+        echo "❌ Error: --batch-id requires a value"
+        usage
+      fi
+      BATCH_ID_ARG="$2"
+      shift 2
+      ;;
     -h|--help)
       usage
       ;;

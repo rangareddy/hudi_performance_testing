@@ -233,7 +233,7 @@ for ((BATCH_ID=0; BATCH_ID<total_batches; BATCH_ID++)); do
     run_step "step${step_num}_${job_type}_${BATCH_ID}_benchmark" "Step ${step_num}/${total_steps}: Benchmark - after ${job_type} batch $BATCH_ID" \
     python3 "${SCRIPT_DIR}/run_benchmark_suite.py" \
       --table-type "$TABLE_TYPE" \
-      --hudi-versions "$HUDI_VERSIONS"
+      --hudi-versions "$HUDI_VERSIONS" \
       --batch-id $BATCH_ID
 
     echo "---------------------------------------"
