@@ -30,6 +30,7 @@ Scripts source `load_config.sh`, which reads `common.properties` and exports the
 Run once on the cluster node (e.g. EMR master) to install Spark (if missing), AWS/S3 jars, and prepare the environment:
 
 ```sh
+sudo yum install tmux
 tmux
 bash setup_node.sh
 ```

@@ -12,11 +12,10 @@ export SKIP_SPARK_HOME_CHECK=1
 source "${SCRIPT_DIR}/load_config.sh"
 
 echo "======================================"
-echo "Hudi logical_ts_perf node setup"
+echo "Hudi performance testing node setup"
 echo "--------------------------------------"
 echo "SOURCE_HUDI_VERSION  : ${SOURCE_HUDI_VERSION}"
 echo "TARGET_HUDI_VERSION  : ${TARGET_HUDI_VERSION}"
-echo "HUDI_VERSION         : ${HUDI_VERSION}"
 echo "SPARK_VERSION        : ${SPARK_VERSION}"
 echo "BASE_PATH            : ${BASE_PATH}"
 echo "JARS_PATH            : ${JARS_PATH}"

@@ -19,12 +19,10 @@ source "${SCRIPT_DIR}/load_config.sh"
 usage() {
   echo ""
   echo "Usage:"
-  echo "  bash $0 --table-type <COPY_ON_WRITE|MERGE_ON_READ> --target-hudi-version <0.14.1|0.14.2> [--hudi-versions 0.14.1,0.14.2] [--dry-run]"
+  echo "  bash $0 --table-type <COPY_ON_WRITE|MERGE_ON_READ> --target-hudi-version <0.14.1|0.14.2> [--dry-run]"
   echo ""
   echo "Options:"
   echo "  --table-type           COPY_ON_WRITE or MERGE_ON_READ (for Hudi table and benchmark)."
-  echo "  --target-hudi-version  Hudi version used for ingestion (e.g. 0.14.1 or 0.14.2)."
-  echo "  --hudi-versions        Comma-separated versions for benchmark runs (default: SOURCE_HUDI_VERSION,TARGET_HUDI_VERSION from common.properties)."
   echo "  --dry-run              Print the plan only, do not run any step."
   echo "  --force               Ignore saved state and run all steps (default: skip steps that already succeeded)."
   echo ""
@@ -43,11 +41,7 @@ usage() {
 }
 
 TABLE_TYPE=""
-# Save config defaults before overwriting (for default --hudi-versions)
-CONFIG_SOURCE_HUDI="${SOURCE_HUDI_VERSION}"
-CONFIG_TARGET_HUDI="${TARGET_HUDI_VERSION}"
-TARGET_HUDI_VERSION=""
-HUDI_VERSIONS="${CONFIG_SOURCE_HUDI},${CONFIG_TARGET_HUDI}"
+HUDI_VERSIONS=${HUDI_VERSIONS:-${SOURCE_HUDI_VERSION},${TARGET_HUDI_VERSION}}
 DRY_RUN=false
 FORCE=false
 
@@ -167,6 +161,7 @@ run_step() {
   if [[ "$status" == "failure" ]]; then
     log_echo ""
     log_echo ">>> $step_name [RETRY - previous run failed]"
+    log_echo "--------------------------------------"
   else
     log_echo ""
     log_echo ">>> $step_name"
