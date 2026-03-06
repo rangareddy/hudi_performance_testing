@@ -189,37 +189,42 @@ if [[ "$DRY_RUN" == true ]]; then
 fi
 
 step_num=0
-total_batches=3
-total_steps=$((total_batches * 3))
+TOTAL_BATCHES=4
+TOTAL_STEPS=$((TOTAL_BATCHES * 3))
 
-for ((BATCH_ID=0; BATCH_ID<total_batches; BATCH_ID++)); do
+for ((BATCH_ID=0; BATCH_ID<TOTAL_BATCHES; BATCH_ID++)); do
     echo "---------------------------------------"
     echo "Processing batch $BATCH_ID..."
     echo "---------------------------------------"
 
-    if [[ "$BATCH_ID" == 0 ]]; then
-      job_type="initial"
-      run_hudi_version="$SOURCE_HUDI_VERSION"
+    if [[ "$BATCH_ID" -lt 2 ]]; then
+      if [[ "$BATCH_ID" == 0 ]]; then
+        job_type="initial"
+        run_hudi_version="$SOURCE_HUDI_VERSION"
+      else
+        job_type="incremental"
+        run_hudi_version="$SOURCE_HUDI_VERSION"
+      fi
     else
       job_type="incremental"
       run_hudi_version="$TARGET_HUDI_VERSION"
     fi
 
     step_num=$((step_num + 1))
-    run_step "step${step_num}_${job_type}_${BATCH_ID}_parquet" "Step ${step_num}/${total_steps}: ${job_type} batch $BATCH_ID - generate parquet data" \
+    run_step "step${step_num}_${job_type}_${BATCH_ID}_parquet" "Step ${step_num}/${TOTAL_STEPS}: ${job_type} batch $BATCH_ID - generate parquet data" \
     bash "${SCRIPT_DIR}/run_parquet_ingestion.sh" \
       --type $job_type \
       --batch-id $BATCH_ID
 
     step_num=$((step_num + 1))
-    run_step "step${step_num}_${job_type}_${BATCH_ID}_hudi" "Step ${step_num}/${total_steps}: Hudi ${job_type} ingestion" \
+    run_step "step${step_num}_${job_type}_${BATCH_ID}_hudi" "Step ${step_num}/${TOTAL_STEPS}: Hudi ${job_type} ingestion" \
     bash "${SCRIPT_DIR}/run_hudi_ingestion.sh" \
       --table-type "$TABLE_TYPE" \
       --target-hudi-version "$run_hudi_version" \
       --batch-id $BATCH_ID
 
     step_num=$((step_num + 1))
-    run_step "step${step_num}_${job_type}_${BATCH_ID}_benchmark" "Step ${step_num}/${total_steps}: Benchmark - after ${job_type} batch $BATCH_ID" \
+    run_step "step${step_num}_${job_type}_${BATCH_ID}_benchmark" "Step ${step_num}/${TOTAL_STEPS}: Benchmark - after ${job_type} batch $BATCH_ID" \
     python3 "${SCRIPT_DIR}/run_benchmark_suite.py" \
       --table-type "$TABLE_TYPE" \
       --hudi-versions "$HUDI_VERSIONS" \
