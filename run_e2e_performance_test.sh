@@ -91,6 +91,11 @@ case "$TABLE_TYPE_UPPER" in
     ;;
 esac
 
+# State file per table type (avoid duplicate runs; retry only on failure)
+E2E_STATE_DIR="${SCRIPT_DIR}/.e2e_state"
+E2E_STATE_FILE="${E2E_STATE_DIR}/state_${TABLE_TYPE}.txt"
+mkdir -p "$E2E_STATE_DIR"
+
 echo "=============================================="
 echo "  E2E Hudi Performance Test"
 echo "=============================================="
@@ -100,11 +105,6 @@ echo "  Benchmark versions  : $HUDI_VERSIONS"
 echo "  Dry run             : $DRY_RUN"
 echo "  State dir           : $E2E_STATE_DIR"
 echo "=============================================="
-
-# State file per table type (avoid duplicate runs; retry only on failure)
-E2E_STATE_DIR="${SCRIPT_DIR}/.e2e_state"
-E2E_STATE_FILE="${E2E_STATE_DIR}/state_${TABLE_TYPE}.txt"
-mkdir -p "$E2E_STATE_DIR"
 
 get_step_status() {
   local step_id="$1"
