@@ -9,7 +9,7 @@ import os
 from pyspark.sql import SparkSession
 from pyspark.sql.functions import col
 
-batch_id = os.environ.get("BATCH_ID", "1")
+batch_id = int(os.environ.get("BATCH_ID", "1"))
 
 # Create Spark session
 spark = SparkSession.builder \
@@ -19,6 +19,7 @@ spark = SparkSession.builder \
 # Data path from env (set by shell from common.properties)
 target_data_path = os.environ.get("TARGET_DATA")
 source_data_path = os.environ.get("SOURCE_DATA")
+
 if source_data_path is None:
     print("❌ SOURCE_DATA not found in environment")
     exit(1)
@@ -46,4 +47,3 @@ print("✅ Incremental batch completed successfully")
 print(f"📍 Data written to: {target_data_path}")
 # Stop the spark session
 spark.stop()
-System.exit(0)
