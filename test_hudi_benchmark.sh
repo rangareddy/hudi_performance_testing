@@ -79,11 +79,11 @@ TABLE_TYPE_UPPER=$(echo "$TABLE_TYPE_ARG" | tr '[:lower:]' '[:upper:]')
 case "$TABLE_TYPE_UPPER" in
   COPY_ON_WRITE|COW)
     TABLE_TYPE="COPY_ON_WRITE"
-    BENCH_DATA_PATH="${BASE_DATA_PATH}/hudi_cow_logical"
+    TABLE_NAME="${BASE_TABLE_NAME}_cow"
     ;;
   MERGE_ON_READ|MOR)
     TABLE_TYPE="MERGE_ON_READ"
-    BENCH_DATA_PATH="${BASE_DATA_PATH}/hudi_mor_logical"
+    TABLE_NAME="${BASE_TABLE_NAME}_mor"
     ;;
   *)
     echo "❌ Invalid TABLE_TYPE: $TABLE_TYPE_ARG"
@@ -91,6 +91,8 @@ case "$TABLE_TYPE_UPPER" in
     exit 1
     ;;
 esac
+
+BENCH_DATA_PATH="${BASE_DATA_PATH}/$TABLE_NAME"
 
 ############################################
 # Print Configuration
