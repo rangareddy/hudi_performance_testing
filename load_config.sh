@@ -32,7 +32,9 @@ load_config() {
   if [ ! -d "$SPARK_HOME" ]; then
     echo "❌ Spark home not found: $SPARK_HOME"
     echo "Please run setup_node.sh to install Spark"
-    exit 1
+    if [[ "${SKIP_SPARK_HOME_CHECK:-0}" != "1" && "${SKIP_SPARK_HOME_CHECK:-0}" != "true" ]]; then
+      exit 1
+    fi
   fi
 
   export SPARK_MAJOR_VERSION=$(echo "${SPARK_VERSION}" | cut -d '.' -f 1,2)
@@ -70,6 +72,8 @@ load_config() {
 
   if [ -z "${AWS_S3_JARS:-}" ]; then
     export AWS_S3_JARS="${SPARK_HOME}/jars/aws-java-sdk-bundle.jar,${SPARK_HOME}/jars/hadoop-aws.jar"
-  fi 
+  fi
   return 0
 }
+
+load_config

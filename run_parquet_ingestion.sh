@@ -61,11 +61,18 @@ echo "SOURCE_DATA       : $SOURCE_DATA"
 echo "INGESTION_TYPE    : $INGESTION_TYPE"
 echo "======================================"
 
-if [ -z "${AWS_S3_JARS:-}" ]; then
-  export AWS_S3_JARS="${SPARK_HOME}/jars/aws-java-sdk-bundle.jar,${SPARK_HOME}/jars/hadoop-aws.jar"
+if [ -z "${SOURCE_DATA:-}" ]; then
+  echo "❌ SOURCE_DATA not found in s3"
+  exit 1
 fi
 
 if [[ "$INGESTION_TYPE" == "initial" ]]; then
+  aws s3 ls $SOURCE_DATA > /dev/null 2>&1
+  if [ $? -eq 0 ]; then
+    echo "Already initial load of SOURCE_DATA exists in s3"
+    echo "Skipping initial ingestion"
+    exit 0
+  fi
   echo "Running initial ingestion"
   "${SPARK_HOME}/bin/spark-shell" \
     --master yarn \

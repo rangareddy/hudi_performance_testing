@@ -24,7 +24,7 @@ usage() {
   echo "Options:"
   echo "  --table-type           COPY_ON_WRITE or MERGE_ON_READ (for Hudi table and benchmark)."
   echo "  --target-hudi-version  Hudi version used for ingestion (e.g. 0.14.1 or 0.14.2)."
-  echo "  --hudi-versions        Comma-separated versions for benchmark runs (default: 0.14.1,0.14.2)."
+  echo "  --hudi-versions        Comma-separated versions for benchmark runs (default: SOURCE_HUDI_VERSION,TARGET_HUDI_VERSION from common.properties)."
   echo "  --dry-run              Print the plan only, do not run any step."
   echo ""
   echo "Flow (9 steps):"
@@ -42,8 +42,11 @@ usage() {
 }
 
 TABLE_TYPE=""
+# Save config defaults before overwriting (for default --hudi-versions)
+CONFIG_SOURCE_HUDI="${SOURCE_HUDI_VERSION}"
+CONFIG_TARGET_HUDI="${TARGET_HUDI_VERSION}"
 TARGET_HUDI_VERSION=""
-HUDI_VERSIONS="0.14.1,0.14.2-SNAPSHOT"
+HUDI_VERSIONS="${CONFIG_SOURCE_HUDI},${CONFIG_TARGET_HUDI}"
 DRY_RUN=false
 
 while [[ $# -gt 0 ]]; do
@@ -51,16 +54,6 @@ while [[ $# -gt 0 ]]; do
     --table-type)
       [[ -z "${2:-}" ]] && { echo "❌ Error: --table-type requires a value"; usage; }
       TABLE_TYPE="$2"
-      shift 2
-      ;;
-    --target-hudi-version)
-      [[ -z "${2:-}" ]] && { echo "❌ Error: --target-hudi-version requires a value"; usage; }
-      TARGET_HUDI_VERSION="$2"
-      shift 2
-      ;;
-    --hudi-versions)
-      [[ -z "${2:-}" ]] && { echo "❌ Error: --hudi-versions requires a value"; usage; }
-      HUDI_VERSIONS="$2"
       shift 2
       ;;
     --dry-run)
@@ -77,8 +70,8 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
-if [[ -z "$TABLE_TYPE" ]] || [[ -z "$TARGET_HUDI_VERSION" ]]; then
-  echo "❌ Error: --table-type and --target-hudi-version are required"
+if [[ -z "$TABLE_TYPE" ]]; then
+  echo "❌ Error: --table-type is required"
   usage
 fi
 

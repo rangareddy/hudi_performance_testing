@@ -6,18 +6,22 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+# Skip Spark home check (Spark not installed yet)
+export SKIP_SPARK_HOME_CHECK=1
 # shellcheck source=load_config.sh
 source "${SCRIPT_DIR}/load_config.sh"
 
 echo "======================================"
 echo "Hudi logical_ts_perf node setup"
 echo "--------------------------------------"
-echo "BASE_PATH         : ${BASE_PATH}"
-echo "JARS_PATH         : ${JARS_PATH}"
-echo "DEST_SCRIPTS_DIR  : ${DEST_SCRIPTS_DIR}"
-echo "HUDI_VERSION      : ${HUDI_VERSION}"
-echo "SPARK_VERSION     : ${SPARK_VERSION}"
-echo "DEST_DIR          : ${DEST_DIR}"
+echo "BASE_PATH            : ${BASE_PATH}"
+echo "JARS_PATH            : ${JARS_PATH}"
+echo "DEST_SCRIPTS_DIR     : ${DEST_SCRIPTS_DIR}"
+echo "SOURCE_HUDI_VERSION  : ${SOURCE_HUDI_VERSION}"
+echo "TARGET_HUDI_VERSION  : ${TARGET_HUDI_VERSION}"
+echo "HUDI_VERSION         : ${HUDI_VERSION}"
+echo "SPARK_VERSION        : ${SPARK_VERSION}"
+echo "DEST_DIR             : ${DEST_DIR}"
 echo "======================================"
 
 if [[ ! -d "$SPARK_HOME" ]]; then

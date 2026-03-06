@@ -24,9 +24,9 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
 
-# Default combinations (matches README)
+# Default combinations (align with common.properties: SOURCE_HUDI_VERSION, TARGET_HUDI_VERSION)
 DEFAULT_TABLE_TYPES = ["COPY_ON_WRITE", "MERGE_ON_READ"]
-DEFAULT_HUDI_VERSIONS = ["0.14.1", "0.14.2"]
+DEFAULT_HUDI_VERSIONS = ["0.14.1", "0.14.2-SNAPSHOT"]
 SEQUENCE_FILENAME = "benchmark_run_sequence.txt"
 DEFAULT_CSV = "hudi_benchmark_results.csv"
 CSV_HEADER = [
@@ -120,7 +120,7 @@ def main() -> int:
         "--hudi-versions",
         type=str,
         default=",".join(DEFAULT_HUDI_VERSIONS),
-        help="Comma-separated Hudi versions, e.g. 0.14.1,0.14.2",
+        help="Comma-separated Hudi versions, e.g. 0.14.1,0.14.2-SNAPSHOT (default matches common.properties).",
     )
     parser.add_argument(
         "--output",
