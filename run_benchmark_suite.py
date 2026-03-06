@@ -37,6 +37,8 @@ CSV_HEADER = [
     "execution_time_seconds",
     "count",
     "run_timestamp_utc",
+    "start_time",
+    "end_time",
     "status",
 ]
 SCRIPT_DIR = Path(os.path.dirname(os.path.abspath(__file__)))
@@ -174,7 +176,9 @@ def main() -> int:
     rows = []  # type: List[Dict[str, Any]]
     for hudi_version in hudi_versions:
         print(f"[Run #{run_sequence}] {args.table_type} @ {hudi_version} ...", flush=True)
+        start_time = time.time()
         exec_time, count, status = run_benchmark(args.table_type, hudi_version, batch_id)
+        end_time = time.time()
         row = {
             "run_sequence": run_sequence,
             "table_type": args.table_type,
@@ -183,6 +187,8 @@ def main() -> int:
             "execution_time_seconds": exec_time if exec_time is not None else "",
             "count": count if count is not None else "",
             "run_timestamp_utc": run_ts,
+            "start_time": start_time,
+            "end_time": end_time,
             "status": status,
         }
         rows.append(row)
