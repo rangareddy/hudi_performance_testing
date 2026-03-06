@@ -92,13 +92,15 @@ echo "  Table type          : $TABLE_TYPE"
 echo "  Target Hudi version : $TARGET_HUDI_VERSION"
 echo "  Benchmark versions  : $HUDI_VERSIONS"
 echo "  Dry run             : $DRY_RUN"
-echo "==============================================""
+echo "=============================================="
 
 run_step() {
   local step_name="$1"
   shift
   echo ""
+  echo "--------------------------------------"
   echo ">>> $step_name"
+  echo "--------------------------------------"
   echo "    $*"
   if [[ "$DRY_RUN" != true ]]; then
     "$@"
@@ -106,8 +108,8 @@ run_step() {
 }
 
 if [[ "$DRY_RUN" == true ]]; then
-echo ""
-echo "[DRY RUN] Would execute the following steps:"
+  echo ""
+  echo "[DRY RUN] Would execute the following steps:"
 fi
 
 # ---------------------------------------------------------------------------
@@ -119,13 +121,13 @@ run_step "Step 1/9: Initial parquet ingestion" \
 # ---------------------------------------------------------------------------
 # 2. Hudi ingestion (initial load)
 # ---------------------------------------------------------------------------
-run_step "Step 2/9: Hudi ingestion (initial load)" \
+run_step "Step 2/9: Hudi ingestion - initial load" \
   bash "${SCRIPT_DIR}/run_hudi_ingestion.sh" --table-type "$TABLE_TYPE" --target-hudi-version "$SOURCE_HUDI_VERSION"
 
 # ---------------------------------------------------------------------------
 # 3. Benchmark (after initial load)
 # ---------------------------------------------------------------------------
-run_step "Step 3/9: Benchmark (after initial load)" \
+run_step "Step 3/9: Benchmark - after initial load" \
   python3 "${SCRIPT_DIR}/run_benchmark_suite.py" --table-type "$TABLE_TYPE" --hudi-versions "$HUDI_VERSIONS"
 
 # ---------------------------------------------------------------------------
@@ -137,7 +139,7 @@ run_step "Step 4/9: Incremental batch 1 - generate parquet data" \
 run_step "Step 5/9: Incremental batch 1 - Hudi ingestion" \
   bash "${SCRIPT_DIR}/run_hudi_ingestion.sh" --table-type "$TABLE_TYPE" --target-hudi-version "$TARGET_HUDI_VERSION"
 
-run_step "Step 6/9: Benchmark (after incremental batch 1)" \
+run_step "Step 6/9: Benchmark - after incremental batch 1" \
   python3 "${SCRIPT_DIR}/run_benchmark_suite.py" --table-type "$TABLE_TYPE" --hudi-versions "$HUDI_VERSIONS"
 
 # ---------------------------------------------------------------------------
@@ -149,7 +151,7 @@ run_step "Step 7/9: Incremental batch 2 - generate parquet data" \
 run_step "Step 8/9: Incremental batch 2 - Hudi ingestion" \
   bash "${SCRIPT_DIR}/run_hudi_ingestion.sh" --table-type "$TABLE_TYPE" --target-hudi-version "$TARGET_HUDI_VERSION"
 
-run_step "Step 9/9: Benchmark (after incremental batch 2)" \
+run_step "Step 9/9: Benchmark - after incremental batch 2" \
   python3 "${SCRIPT_DIR}/run_benchmark_suite.py" --table-type "$TABLE_TYPE" --hudi-versions "$HUDI_VERSIONS"
 
 echo ""
