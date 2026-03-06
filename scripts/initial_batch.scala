@@ -26,7 +26,7 @@ val baseTime = LocalDateTime.now().truncatedTo(ChronoUnit.MILLIS)
 val zone = java.time.ZoneId.systemDefault()
 
 // S3 output path (set by run_initial_ingestion.sh from common.properties)
-val outputPath = sys.env.getOrElse("SOURCE_DFS_ROOT", "s3://performance-benchmark-datasets-us-west-2/hudi-bench/performance/logical_ts_perf/data/wide_500cols_10000parts")
+val outputPath = sys.env.getOrElse("SOURCE_DATA", "s3://performance-benchmark-datasets-us-west-2/hudi-bench/performance/logical_ts_perf/data/wide_500cols_10000parts")
 
 // Helper functions
 def toTimestamp(local: LocalDateTime): Timestamp = Timestamp.valueOf(local)

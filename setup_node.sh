@@ -24,7 +24,7 @@ if [[ ! -d "$SPARK_HOME" ]]; then
   SPARK_TAR_FILE="spark-${SPARK_VERSION}-bin-hadoop${HADOOP_VERSION}.tgz"
   SPARK_URL="https://archive.apache.org/dist/spark/spark-${SPARK_VERSION}/${SPARK_TAR_FILE}"
   if [[ ! -f "$HOME/${SPARK_TAR_FILE}" ]]; then
-    wget -O "$HOME/${SPARK_TAR_FILE}" "$SPARK_URL"
+    wget --quiet -O "$HOME/${SPARK_TAR_FILE}" "$SPARK_URL"
   fi
   tar -xzf "$HOME/${SPARK_TAR_FILE}" -C "$HOME"
   rm -f "$HOME/${SPARK_TAR_FILE}"

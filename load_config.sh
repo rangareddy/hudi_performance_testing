@@ -29,13 +29,19 @@ load_config() {
     fi
   done < "$config_file"
 
+  if [ ! -d "$SPARK_HOME" ]; then
+    echo "❌ Spark home not found: $SPARK_HOME"
+    echo "Please run setup_node.sh to install Spark"
+    exit 1
+  fi
+
   export SPARK_MAJOR_VERSION=$(echo "${SPARK_VERSION}" | cut -d '.' -f 1,2)
 
   # Derived paths (only if not already set)
   [[ -z "${JARS_PATH:-}" && -n "${BASE_PATH:-}" ]] && export JARS_PATH="${BASE_PATH}/jars"
   [[ -z "${DATA_PATH:-}" && -n "${BASE_PATH:-}" ]] && export DATA_PATH="${BASE_PATH}/data"
   [[ -z "${TABLE_BASE_PATH:-}" && -n "${DATA_PATH:-}" && -n "${TABLE_NAME:-}" ]] && export TABLE_BASE_PATH="${DATA_PATH}/hudi_logical"
-  [[ -z "${SOURCE_DFS_ROOT:-}" && -n "${DATA_PATH:-}" ]] && export SOURCE_DFS_ROOT="${DATA_PATH}/wide_500cols_10000parts"
+  [[ -z "${SOURCE_DATA:-}" && -n "${DATA_PATH:-}" ]] && export SOURCE_DATA="${DATA_PATH}/wide_500cols_10000parts"
   [[ -z "${BASE_DATA_PATH:-}" && -n "${DATA_PATH:-}" ]] && export BASE_DATA_PATH="${DATA_PATH}"
 
   # Hudi jars for benchmark (spark-submit read benchmark)

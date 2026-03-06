@@ -50,14 +50,14 @@ if [[ "$INGESTION_TYPE" != "initial" ]] && [[ "$INGESTION_TYPE" != "incremental"
   exit 1
 fi
 
-export SOURCE_DFS_ROOT
+export SOURCE_DATA
 
 echo "======================================"
 echo "Running $INGESTION_TYPE ingestion"
 echo "--------------------------------------"
 echo "SPARK_HOME        : $SPARK_HOME"
 echo "Script            : $INITIAL_BATCH_SCALA"
-echo "SOURCE_DATA_PATH  : $SOURCE_DFS_ROOT"
+echo "SOURCE_DATA       : $SOURCE_DATA"
 echo "INGESTION_TYPE    : $INGESTION_TYPE"
 echo "======================================"
 

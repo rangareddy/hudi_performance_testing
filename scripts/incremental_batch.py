@@ -2,7 +2,7 @@
 """
 Incremental Batch - Filter and append specific records
 Usage: spark-submit incremental_batch.py
-Environment: SOURCE_DFS_ROOT (parquet data path). Set by generate_incremental_batch_data.sh from common.properties.
+Environment: SOURCE_DATA (parquet data path). Set by run_ingestion_data_generator.sh from common.properties.
 """
 
 import os
@@ -16,7 +16,7 @@ spark = SparkSession.builder \
 
 # Data path from env (set by shell from common.properties)
 data_path = os.environ.get(
-    "SOURCE_DFS_ROOT",
+    "SOURCE_DATA",
     "s3://performance-benchmark-datasets-us-west-2/hudi-bench/performance/logical_ts_perf/data/wide_500cols_10000parts"
 )
 

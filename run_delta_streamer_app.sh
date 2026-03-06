@@ -99,10 +99,14 @@ echo "HUDI_VERSION    : $TARGET_HUDI_VERSION"
 echo "TABLE_TYPE      : $TABLE_TYPE"
 echo "TABLE_NAME      : $TABLE_NAME"
 echo "TABLE_BASE_PATH : $TABLE_BASE_PATH"
-echo "SOURCE_DFS_ROOT : $SOURCE_DFS_ROOT"
+echo "SOURCE_DATA     : $SOURCE_DATA"
+echo "HUDI_JARS_DELTA : $HUDI_JARS_DELTA"
 echo "======================================"
 
-time "$SPARK_HOME/bin/spark-submit" \
+# print the spark-submit command
+echo "Executing spark-submit command: "
+echo "------------------------------------------------------------------------------"
+echo "spark-submit command: $SPARK_HOME/bin/spark-submit \
   --master yarn \
   --deploy-mode client \
   --jars "$HUDI_JARS_DELTA" \ 
@@ -126,7 +130,40 @@ time "$SPARK_HOME/bin/spark-submit" \
   --source-class org.apache.hudi.utilities.sources.ParquetDFSSource \
   --schemaprovider-class org.apache.hudi.utilities.schema.FilebasedSchemaProvider \
   --source-ordering-field col_1 \
-  --hoodie-conf hoodie.streamer.source.dfs.root="${SOURCE_DFS_ROOT}" \
+  --hoodie-conf hoodie.streamer.source.dfs.root="${SOURCE_DATA}" \
+  --hoodie-conf hoodie.streamer.schemaprovider.source.schema.file="$SCHEMA_FILE_ARG" \
+  --hoodie-conf hoodie.streamer.schemaprovider.target.schema.file="$SCHEMA_FILE_ARG" \
+  --hoodie-conf hoodie.datasource.write.recordkey.field=col_1 \
+  --hoodie-conf hoodie.datasource.write.precombine.field=col_1 \
+  --hoodie-conf hoodie.datasource.write.partitionpath.field=partition_col"  
+echo "------------------------------------------------------------------------------"
+echo ""
+
+time "${SPARK_HOME}/bin/spark-submit" \
+  --master yarn \
+  --deploy-mode client \
+  --jars "$HUDI_JARS_DELTA" \ 
+  --properties-file "${SPARK_DEFAULTS_CONF}" \
+  --conf spark.dynamicAllocation.enabled=true \
+  --conf spark.sql.adaptive.enabled=true \
+  --conf spark.hadoop.mapreduce.fileoutputcommitter.algorithm.version=2 \
+  --conf spark.hadoop.fs.s3a.committer.name=directory \
+  --conf spark.sql.sources.commitProtocolClass=org.apache.spark.internal.io.cloud.PathOutputCommitProtocol \
+  --conf spark.sql.parquet.output.committer.class=org.apache.spark.internal.io.cloud.BindingParquetOutputCommitter \
+  --conf spark.serializer=org.apache.spark.serializer.KryoSerializer \
+  --conf spark.sql.extensions=org.apache.spark.sql.hudi.HoodieSparkSessionExtension \
+  --conf spark.sql.catalog.spark_catalog=org.apache.spark.sql.hudi.catalog.HoodieCatalog \
+  --class org.apache.hudi.utilities.streamer.HoodieStreamer \
+  "$HUDI_UTILITIES_JAR" \
+  --props "$PROPS_FILE" \
+  --table-type "$TABLE_TYPE" \
+  --op UPSERT \
+  --target-base-path "$TABLE_BASE_PATH" \
+  --target-table "$TABLE_NAME" \
+  --source-class org.apache.hudi.utilities.sources.ParquetDFSSource \
+  --schemaprovider-class org.apache.hudi.utilities.schema.FilebasedSchemaProvider \
+  --source-ordering-field col_1 \
+  --hoodie-conf hoodie.streamer.source.dfs.root="${SOURCE_DATA}" \
   --hoodie-conf hoodie.streamer.schemaprovider.source.schema.file="$SCHEMA_FILE_ARG" \
   --hoodie-conf hoodie.streamer.schemaprovider.target.schema.file="$SCHEMA_FILE_ARG" \
   --hoodie-conf hoodie.datasource.write.recordkey.field=col_1 \
