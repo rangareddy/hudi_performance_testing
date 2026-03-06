@@ -56,11 +56,11 @@ def read_and_increment_sequence(project_dir: Path) -> int:
 
 def run_benchmark(project_dir: Path, table_type: str, hudi_version: str) -> Tuple[Optional[float], Optional[int], str]:
     """
-    Run test_hudi_benchmark.sh and parse output.
+    Run run_hudi_benchmark.sh and parse output.
     Returns (execution_time_seconds, count, status).
     status is 'ok' or error message.
     """
-    script = project_dir / "test_hudi_benchmark.sh"
+    script = project_dir / "run_hudi_benchmark.sh"
     if not script.exists():
         return None, None, f"script not found: {script}"
 
@@ -161,7 +161,7 @@ def main() -> int:
         print(f"Hudi versions: {hudi_versions}")
         print(f"Output CSV: {output_path}")
         for hv in hudi_versions:
-            print(f"  Would run: test_hudi_benchmark.sh --table-type {args.table_type} --target-hudi-version {hv}")
+            print(f"  Would run: run_hudi_benchmark.sh --table-type {args.table_type} --target-hudi-version {hv}")
         return 0
 
     rows = []  # type: List[Dict[str, Any]]
