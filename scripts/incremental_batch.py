@@ -18,16 +18,17 @@ spark = SparkSession.builder \
     .getOrCreate()
 
 # Data path from env (set by shell from common.properties)
-data_path = os.environ.get("TARGET_DATA")
-if data_path is None:
-    print("❌ TARGET_DATA not found in environment")
+target_data_path = os.environ.get("TARGET_DATA")
+source_data_path = os.environ.get("SOURCE_DATA")
+if source_data_path is None:
+    print("❌ SOURCE_DATA not found in environment")
     exit(1)
 
 print(f"🚀 Starting incremental batch...")
-print(f"📍 Reading from: {data_path}")
+print(f"📍 Reading from: {source_data_path}")
 
 # Read the existing parquet data
-df = spark.read.parquet(data_path)
+df = spark.read.parquet(source_data_path)
 
 # Filter specific rows (first 100 values)
 start = (batch_id - 1) * 100 + 1
@@ -37,12 +38,12 @@ values = [f"value_{i}_{batch_id}" for i in range(start, end)]
 filtered_df = df.filter(col("col_1").isin(values))
 
 print(f"📊 Filtered {filtered_df.count()} records")
-print(f"💾 Appending filtered data back to: {data_path}")
+print(f"💾 Appending filtered data back to: {target_data_path}")
 
 # Append the filtered data back
-filtered_df.write.mode("append").parquet(data_path)
-
+filtered_df.write.mode("append").parquet(target_data_path)
 print("✅ Incremental batch completed successfully")
-
+print(f"📍 Data written to: {target_data_path}")
 # Stop the spark session
 spark.stop()
+System.exit(0)

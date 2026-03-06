@@ -90,12 +90,12 @@ fi
 
 export BATCH_ID
 export TARGET_DATA="${SOURCE_DATA}/batch_${BATCH_ID}"
-aws s3 ls $TARGET_DATA > /dev/null 2>&1
-if [ $? -eq 0 ]; then
+if aws s3 ls "$TARGET_DATA" > /dev/null 2>&1; then
   echo "Already loaded data of $TARGET_DATA exists in s3 for ingestion type: $INGESTION_TYPE"
   echo "Skipping ingestion"
   exit 0
 fi
+
 EXECTION_STATUS=0
 
 echo "Batch ID : $BATCH_ID"
@@ -112,10 +112,10 @@ if [[ "$INGESTION_TYPE" == "initial" ]]; then
     --conf spark.hadoop.mapreduce.fileoutputcommitter.algorithm.version=2 \
     --conf spark.hadoop.fs.s3a.committer.name=directory \
     -i "$INITIAL_BATCH_SCALA"
-
     EXECTION_STATUS=$?
 else
   echo "Running incremental ingestion"
+  export SOURCE_DATA="${SOURCE_DATA}/batch_0"
   "${SPARK_HOME}/bin/spark-submit" \
     --master yarn \
     --deploy-mode client \
@@ -125,7 +125,6 @@ else
     --conf spark.hadoop.mapreduce.fileoutputcommitter.algorithm.version=2 \
     --conf spark.hadoop.fs.s3a.committer.name=directory \
     "$INCREMENTAL_SCRIPT"
-    
     EXECTION_STATUS=$?
 fi
 
