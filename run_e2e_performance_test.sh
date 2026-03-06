@@ -92,13 +92,20 @@ case "$TABLE_TYPE_UPPER" in
 esac
 
 # State file per table type (avoid duplicate runs; retry only on failure)
-TARGET_VERSION=$(echo "$TARGET_HUDI_VERSION" | cut -d '.' -f 1,2 | tr -d '.')
+TARGET_VERSION=$(echo "${TARGET_HUDI_VERSION}" | cut -d '.' -f 1,2 | tr -d '.')
 TABLE_TYPE_LOWER=$(echo "$TABLE_TYPE" | tr '[:upper:]' '[:lower:]')
 E2E_STATE_DIR="${SCRIPT_DIR}/.e2e_state"
 E2E_STATE_FILE="${E2E_STATE_DIR}/state_${TABLE_TYPE_LOWER}_v${TARGET_VERSION}.txt"
 S3_STATE_FILE="${BASE_PATH}/e2e_state/state_${TABLE_TYPE_LOWER}_v${TARGET_VERSION}.txt"
 S3_CSV_FILE="${BASE_PATH}/hudi_benchmark_results.csv"
 mkdir -p "$E2E_STATE_DIR"
+
+# Log file: all output from here goes to log and console
+LOG_DIR="${SCRIPT_DIR}/logs"
+mkdir -p "$LOG_DIR"
+LOG_FILE="${LOG_DIR}/e2e_${TABLE_TYPE_LOWER}_v${TARGET_VERSION}_$(date +%Y%m%d_%H%M%S).log"
+exec > >(tee "$LOG_FILE") 2>&1
+echo "Log file: $LOG_FILE"
 
 # If state file exists on S3, download to local so we resume from last run
 if aws s3 ls "$S3_STATE_FILE" &>/dev/null; then
@@ -237,5 +244,6 @@ fi
 echo ""
 echo "=============================================="
 echo "  ✅ E2E performance test completed"
-echo "Report available at: ${SCRIPT_DIR}/hudi_benchmark_results.csv"
+echo "  Report  : ${SCRIPT_DIR}/hudi_benchmark_results.csv"
+echo "  Log file: $LOG_FILE"
 echo "=============================================="
