@@ -29,13 +29,13 @@ load_config() {
     fi
   done < "$config_file"
 
-  if [ ! -d "$SPARK_HOME" ]; then
-    echo "❌ Spark home not found: $SPARK_HOME"
-    echo "Please run setup_node.sh to install Spark"
-    if [[ "${SKIP_SPARK_HOME_CHECK:-0}" != "1" && "${SKIP_SPARK_HOME_CHECK:-0}" != "true" ]]; then
+  if [[ "${SKIP_SPARK_HOME_CHECK:-0}" != "1" ]]; then
+    if [ ! -d "$SPARK_HOME" ]; then
+      echo "❌ Spark home not found: $SPARK_HOME"
+      echo "Please run setup_node.sh to install Spark"
       exit 1
     fi
-  fi
+  fi 
 
   export SPARK_MAJOR_VERSION=$(echo "${SPARK_VERSION}" | cut -d '.' -f 1,2)
 

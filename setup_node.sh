@@ -25,6 +25,7 @@ echo "DEST_DIR             : ${DEST_DIR}"
 echo "======================================"
 
 if [[ ! -d "$SPARK_HOME" ]]; then
+  echo "Installing Spark $SPARK_VERSION"
   SPARK_TAR_FILE="spark-${SPARK_VERSION}-bin-hadoop${HADOOP_VERSION}.tgz"
   SPARK_URL="https://archive.apache.org/dist/spark/spark-${SPARK_VERSION}/${SPARK_TAR_FILE}"
   if [[ ! -f "$HOME/${SPARK_TAR_FILE}" ]]; then
@@ -32,8 +33,9 @@ if [[ ! -d "$SPARK_HOME" ]]; then
   fi
   tar -xzf "$HOME/${SPARK_TAR_FILE}" -C "$HOME"
   rm -f "$HOME/${SPARK_TAR_FILE}"
-
   SPARK_HOME="$HOME/spark-${SPARK_VERSION}-bin-hadoop${HADOOP_VERSION}"
+  ln -sf "$SPARK_HOME" "$HOME/spark"
+  echo "Spark successfully installed at $SPARK_HOME"
   wget -q https://repo1.maven.org/maven2/org/apache/hadoop/hadoop-aws/3.3.4/hadoop-aws-3.3.4.jar -O "$SPARK_HOME/jars/hadoop-aws-3.3.4.jar"
   ln -sf "$SPARK_HOME/jars/hadoop-aws-3.3.4.jar" "$SPARK_HOME/jars/hadoop-aws.jar"
   wget -q https://repo1.maven.org/maven2/com/amazonaws/aws-java-sdk-bundle/1.12.262/aws-java-sdk-bundle-1.12.262.jar -O "$SPARK_HOME/jars/aws-java-sdk-bundle-1.12.262.jar"
