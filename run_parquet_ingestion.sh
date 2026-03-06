@@ -14,16 +14,21 @@ source "${SCRIPT_DIR}/load_config.sh"
 usage() {
   echo ""
   echo "Usage:"
-  echo "  bash $SCRIPT_NAME --type <initial|incremental>"
+  echo "  bash $SCRIPT_NAME --type <initial|incremental> --batch-id <id>"
+  echo ""
+  echo "Options:"
+  echo "  --type        initial | incremental"
+  echo "  --batch-id    Batch ID (required, non-negative integer)"
   echo ""
   echo "Examples:"
-  echo "  bash $SCRIPT_NAME --type initial"
-  echo "  bash $SCRIPT_NAME --type incremental"
+  echo "  bash $SCRIPT_NAME --type initial --batch-id 0"
+  echo "  bash $SCRIPT_NAME --type incremental --batch-id 1"
   echo ""
   exit 1
 }
 
 INGESTION_TYPE="initial"
+BATCH_ID=""
 while [[ $# -gt 0 ]]; do
   case $1 in
     --type)
@@ -32,6 +37,14 @@ while [[ $# -gt 0 ]]; do
         usage
       fi
       INGESTION_TYPE="$2"
+      shift 2
+      ;;
+    --batch-id)
+      if [[ -z "$2" ]]; then
+        echo "❌ Error: --batch-id requires a value"
+        usage
+      fi
+      BATCH_ID="$2"
       shift 2
       ;;
     -h|--help)
@@ -43,6 +56,15 @@ while [[ $# -gt 0 ]]; do
       ;;
   esac
 done
+
+if [[ -z "$BATCH_ID" ]]; then
+  echo "❌ Error: --batch-id is required"
+  usage
+fi
+if [[ ! "$BATCH_ID" =~ ^[0-9]+$ ]]; then
+  echo "❌ Error: --batch-id must be a non-negative integer: $BATCH_ID"
+  exit 1
+fi
 
 if [[ "$INGESTION_TYPE" != "initial" ]] && [[ "$INGESTION_TYPE" != "incremental" ]]; then
   echo "❌ Invalid INGESTION_TYPE: $INGESTION_TYPE"
@@ -66,15 +88,7 @@ if [ -z "${SOURCE_DATA:-}" ]; then
   exit 1
 fi
 
-BATCH_ID_FILE="${SCRIPT_DIR}/incremental_batch_id.txt"
-if [[ -f "$BATCH_ID_FILE" ]]; then
-  BATCH_ID=$(cat "$BATCH_ID_FILE" | tr -d '[:space:]')
-  [[ -z "$BATCH_ID" || ! "$BATCH_ID" =~ ^[0-9]+$ ]] && BATCH_ID=1
-else
-  BATCH_ID=0
-fi
 export BATCH_ID
-
 export TARGET_DATA="${SOURCE_DATA}/batch_${BATCH_ID}"
 aws s3 ls $TARGET_DATA > /dev/null 2>&1
 if [ $? -eq 0 ]; then
@@ -84,7 +98,7 @@ if [ $? -eq 0 ]; then
 fi
 EXECTION_STATUS=0
 
-echo "Incremental batch ID : $BATCH_ID"
+echo "Batch ID : $BATCH_ID"
 echo "Target data : $TARGET_DATA"
 
 if [[ "$INGESTION_TYPE" == "initial" ]]; then
@@ -116,10 +130,8 @@ else
 fi
 
 if [ $EXECTION_STATUS -eq 0 ]; then
-  NEXT_BATCH_ID=$((BATCH_ID + 1))
-  echo "$NEXT_BATCH_ID" > "$BATCH_ID_FILE"
-  echo "✅ Ingestion of $INGESTION_TYPE completed. Next batch ID will be: $NEXT_BATCH_ID"
+  echo "✅ Ingestion of $INGESTION_TYPE completed (batch-id $BATCH_ID)."
 else
-  echo "❌ Ingestion of $INGESTION_TYPE failed. Batch ID $BATCH_ID not updated."
+  echo "❌ Ingestion of $INGESTION_TYPE failed. Batch ID $BATCH_ID."
   exit 1
 fi

@@ -42,7 +42,7 @@ bash setup_node.sh
 ### 1. Generate initial parquet data
 
 ```sh
-bash run_parquet_ingestion.sh --type initial
+bash run_parquet_ingestion.sh --type initial --batch-id 0
 ```
 
 ### 2. Create initial Hudi COW table (0.14.1)
@@ -61,7 +61,7 @@ bash test_hudi_benchmark.sh --table-type COPY_ON_WRITE --target-hudi-version 0.1
 ### 4. Generate incremental parquet data
 
 ```sh
-bash run_parquet_ingestion.sh --type incremental
+bash run_parquet_ingestion.sh --type incremental --batch-id 1
 ```
 
 ### 5. Apply incremental ingestion with 0.14.1
@@ -80,7 +80,7 @@ bash test_hudi_benchmark.sh --table-type COPY_ON_WRITE --target-hudi-version 0.1
 ### 7. Generate more incremental data
 
 ```sh
-bash run_parquet_ingestion.sh --type incremental
+bash run_parquet_ingestion.sh --type incremental --batch-id 2
 ```
 
 ### 8. Apply incremental ingestion with 0.14.2
@@ -92,7 +92,7 @@ bash run_hudi_ingestion.sh --table-type COPY_ON_WRITE --target-hudi-version 0.14
 ### 9. Generate another incremental batch (optional)
 
 ```sh
-bash run_parquet_ingestion.sh --type incremental
+bash run_parquet_ingestion.sh --type incremental --batch-id 3
 ```
 
 ### 10. Apply again with 0.14.2 (optional)
@@ -160,7 +160,7 @@ Optional: `--hudi-versions 0.14.1,0.14.2` (versions to use in benchmark runs), `
 | Script | Purpose |
 |--------|--------|
 | `setup_node.sh` | One-time setup: Spark, AWS jars, env (no S3 jar download). |
-| `run_parquet_ingestion.sh` | Generate parquet data: `--type initial` or `--type incremental`. |
+| `run_parquet_ingestion.sh` | Generate parquet data: `--type initial \| incremental` and **`--batch-id <id>`** (required). |
 | `run_hudi_ingestion.sh` | Run Hudi Streamer: `--table-type COPY_ON_WRITE \| MERGE_ON_READ` and `--target-hudi-version 0.14.1 \| 0.14.2`. |
 | `run_hudi_benchmark.sh` | Single read benchmark: `--table-type` and `--target-hudi-version`. |
 | `run_benchmark_suite.py` | Run benchmarks for multiple Hudi versions, append results to CSV with run sequence. |

@@ -30,7 +30,10 @@ print(f"📍 Reading from: {data_path}")
 df = spark.read.parquet(data_path)
 
 # Filter specific rows (first 100 values)
-values = [f"value_{i}_1" for i in range(1, 101)]
+start = (batch_id - 1) * 100 + 1
+end = batch_id * 100 + 1
+
+values = [f"value_{i}_{batch_id}" for i in range(start, end)]
 filtered_df = df.filter(col("col_1").isin(values))
 
 print(f"📊 Filtered {filtered_df.count()} records")
