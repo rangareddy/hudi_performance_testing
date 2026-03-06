@@ -135,15 +135,34 @@ Data generation is shared: run **`run_ingestion_data_generator.sh --type initial
 
 ---
 
+## E2E performance test (single script)
+
+To run the full flow in one go: **1 initial ingestion → Hudi ingestion → benchmark → 2 incremental cycles** (each cycle: generate data → Hudi ingestion → benchmark):
+
+```sh
+bash run_e2e_performance_test.sh --table-type COPY_ON_WRITE --target-hudi-version 0.14.1
+```
+
+For MERGE_ON_READ:
+
+```sh
+bash run_e2e_performance_test.sh --table-type MERGE_ON_READ --target-hudi-version 0.14.2
+```
+
+Optional: `--hudi-versions 0.14.1,0.14.2` (versions to use in benchmark runs), `--dry-run` (print plan only).
+
+---
+
 ## Script reference
 
 | Script | Purpose |
 |--------|--------|
 | `setup_node.sh` | One-time setup: Spark, AWS jars, env (no S3 jar download). |
-| `run_ingestion_data_generator.sh` | Generate parquet data: `--type initial` or `--type incremental`. |
+| `run_parquet_ingestion.sh` | Generate parquet data: `--type initial` or `--type incremental`. |
 | `run_hudi_ingestion.sh` | Run Hudi Streamer: `--table-type COPY_ON_WRITE \| MERGE_ON_READ` and `--target-hudi-version 0.14.1 \| 0.14.2`. |
-| `test_hudi_benchmark.sh` | Read benchmark: `--table-type COPY_ON_WRITE \| MERGE_ON_READ` and `--target-hudi-version 0.14.1 \| 0.14.2`. |
-| `run_benchmark_suite.py` | Run benchmarks for multiple table types and Hudi versions (e.g. COW+MOR × 0.14.1+0.14.2), append results to CSV with a run sequence number. |
+| `run_hudi_benchmark.sh` | Single read benchmark: `--table-type` and `--target-hudi-version`. |
+| `run_benchmark_suite.py` | Run benchmarks for multiple Hudi versions, append results to CSV with run sequence. |
+| `run_e2e_performance_test.sh` | **E2E:** 1 initial + 2 incremental cycles (parquet → Hudi ingestion → benchmark each). |
 
 Use `-h` or `--help` on any script for usage.
 
