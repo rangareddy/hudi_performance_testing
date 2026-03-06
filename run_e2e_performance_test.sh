@@ -118,6 +118,7 @@ log_echo "  Table type          : $TABLE_TYPE"
 log_echo "  Target Hudi version : $TARGET_HUDI_VERSION"
 log_echo "  Benchmark versions  : $HUDI_VERSIONS"
 log_echo "  Dry run             : $DRY_RUN"
+log_echo "  Force (ignore state): $FORCE"
 log_echo "  State dir           : $E2E_STATE_DIR"
 log_echo "=============================================="
 
@@ -125,8 +126,12 @@ get_step_status() {
   local step_id="$1"
   if [[ -f "$E2E_STATE_FILE" ]]; then
     local line
-    line=$(grep -E "^${step_id}=" "$E2E_STATE_FILE" 2>/dev/null || true)
-    [[ -n "$line" ]] && echo "${line#*=}" || echo ""
+    line=$(grep -F "${step_id}=" "$E2E_STATE_FILE" 2>/dev/null || true)
+    if [[ -n "$line" ]]; then
+      echo "${line#*=}" | tr -d '[:space:]'
+    else
+      echo ""
+    fi
   else
     echo ""
   fi
@@ -137,12 +142,16 @@ set_step_status() {
   local status="$2"
   local tmp_file="${E2E_STATE_FILE}.tmp"
   if [[ -f "$E2E_STATE_FILE" ]]; then
-    grep -v -E "^${step_id}=" "$E2E_STATE_FILE" 2>/dev/null > "$tmp_file" || true
+    grep -v -F "${step_id}=" "$E2E_STATE_FILE" 2>/dev/null > "$tmp_file" || true
   else
     : > "$tmp_file"
   fi
   echo "${step_id}=${status}" >> "$tmp_file"
   mv "$tmp_file" "$E2E_STATE_FILE"
+  # Upload state to S3 after each step so we can resume from another host or after failure
+  if [[ -f "$E2E_STATE_FILE" ]] && [[ "$DRY_RUN" != true ]]; then
+    aws s3 cp "$E2E_STATE_FILE" "$S3_STATE_FILE" 2>&1 | tee -a "$LOG_FILE" || true
+  fi
 }
 
 run_step() {
@@ -151,17 +160,23 @@ run_step() {
   shift 2
   local status
   status=$(get_step_status "$step_id")
-  if [[ "$status" == "success" ]]; then
+
+  # Skip only if already succeeded and not --force
+  if [[ "$FORCE" != true ]] && [[ "$status" == "success" ]]; then
     log_echo ""
     log_echo "--------------------------------------"
     log_echo ">>> $step_name [SKIPPED - already succeeded]"
     log_echo "--------------------------------------"
     return 0
   fi
+
   if [[ "$status" == "failure" ]]; then
     log_echo ""
     log_echo ">>> $step_name [RETRY - previous run failed]"
     log_echo "--------------------------------------"
+  elif [[ "$FORCE" == true ]]; then
+    log_echo ""
+    log_echo ">>> $step_name [FORCE - running regardless of state]"
   else
     log_echo ""
     log_echo ">>> $step_name"
@@ -227,17 +242,14 @@ run_step "step8_incr2_hudi" "Step 8/9: Incremental batch 2 - Hudi ingestion" \
 run_step "step9_benchmark_incr2" "Step 9/9: Benchmark - after incremental batch 2" \
   python3 "${SCRIPT_DIR}/run_benchmark_suite.py" --table-type "$TABLE_TYPE" --hudi-versions "$HUDI_VERSIONS"
 
-# Upload results and state to S3 (if files exist)
+# Upload results to S3 at end (state file already uploaded after each step)
 if [[ "$DRY_RUN" != true ]]; then
   if [[ -f "${SCRIPT_DIR}/hudi_benchmark_results.csv" ]]; then
     log_echo ""
     log_echo "Uploading hudi_benchmark_results.csv to S3: $S3_CSV_FILE"
     aws s3 cp "${SCRIPT_DIR}/hudi_benchmark_results.csv" "$S3_CSV_FILE" 2>&1 | tee -a "$LOG_FILE" || true
   fi
-  if [[ -f "$E2E_STATE_FILE" ]]; then
-    log_echo "Uploading E2E state to S3: $S3_STATE_FILE"
-    aws s3 cp "$E2E_STATE_FILE" "$S3_STATE_FILE" 2>&1 | tee -a "$LOG_FILE" || true
-  fi
+  log_echo "E2E state synced to S3 after each step: $S3_STATE_FILE"
 fi
 
 log_echo ""
