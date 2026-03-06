@@ -106,12 +106,14 @@ echo "Spark Home    : $SPARK_HOME"
 echo "Script Path   : $PY_SCRIPT"
 echo "======================================"
 
-HUDI_BENCH_JARS=${HUDI_JARS}
+HUDI_JARS_BENCH=${HUDI_JARS}
 if [ "$TARGET_HUDI_VERSION" != "$HUDI_VERSION" ]; then 
-  HUDI_BENCH_JARS="${JARS_PATH}/hudi-spark${SPARK_MAJOR_VERSION}-bundle_${SCALA_VERSION}-${TARGET_HUDI_VERSION}.jar,${JARS_PATH}/hudi-utilities-slim-bundle_${SCALA_VERSION}-${TARGET_HUDI_VERSION}.jar"
+  HUDI_UTILITIES_BENCH_JAR="${JARS_PATH}/hudi-utilities-slim-bundle_${SCALA_VERSION}-${TARGET_HUDI_VERSION}.jar"
+  HUDI_SPARK_BENCH_JAR="${JARS_PATH}/hudi-spark${SPARK_MAJOR_VERSION}-bundle_${SCALA_VERSION}-${TARGET_HUDI_VERSION}.jar"
+  HUDI_JARS_BENCH="${HUDI_SPARK_BENCH_JAR},${HUDI_UTILITIES_BENCH_JAR}"
 fi
 
-echo "HUDI_BENCH_JARS: $HUDI_BENCH_JARS"
+echo "Hudi Benchmark Jars: $HUDI_JARS_BENCH"
 
 ############################################
 # Run Spark Job
@@ -121,7 +123,7 @@ echo "HUDI_BENCH_JARS: $HUDI_BENCH_JARS"
   --master yarn \
   --deploy-mode client \
   --properties-file "${SPARK_DEFAULTS_CONF}" \
-  --jars "$HUDI_BENCH_JARS" \
+  --jars "$HUDI_JARS_BENCH" \
   --conf "spark.serializer=org.apache.spark.serializer.KryoSerializer" \
   --conf "spark.sql.catalog.spark_catalog=org.apache.spark.sql.hudi.catalog.HoodieCatalog" \
   --conf "spark.sql.extensions=org.apache.spark.sql.hudi.HoodieSparkSessionExtension" \

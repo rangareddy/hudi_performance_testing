@@ -30,11 +30,9 @@ if [[ ! -d "$SPARK_HOME" ]]; then
   rm -f "$HOME/${SPARK_TAR_FILE}"
 
   SPARK_HOME="$HOME/spark-${SPARK_VERSION}-bin-hadoop${HADOOP_VERSION}"
-  wget https://repo1.maven.org/maven2/org/apache/hadoop/hadoop-aws/3.3.4/hadoop-aws-3.3.4.jar \
-    -O "$SPARK_HOME/jars/hadoop-aws-3.3.4.jar"
+  wget -q https://repo1.maven.org/maven2/org/apache/hadoop/hadoop-aws/3.3.4/hadoop-aws-3.3.4.jar -O "$SPARK_HOME/jars/hadoop-aws-3.3.4.jar"
   ln -sf "$SPARK_HOME/jars/hadoop-aws-3.3.4.jar" "$SPARK_HOME/jars/hadoop-aws.jar"
-  wget https://repo1.maven.org/maven2/com/amazonaws/aws-java-sdk-bundle/1.12.262/aws-java-sdk-bundle-1.12.262.jar \
-    -O "$SPARK_HOME/jars/aws-java-sdk-bundle-1.12.262.jar"
+  wget -q https://repo1.maven.org/maven2/com/amazonaws/aws-java-sdk-bundle/1.12.262/aws-java-sdk-bundle-1.12.262.jar -O "$SPARK_HOME/jars/aws-java-sdk-bundle-1.12.262.jar"
   ln -sf "$SPARK_HOME/jars/aws-java-sdk-bundle-1.12.262.jar" "$SPARK_HOME/jars/aws-java-sdk-bundle.jar"
 fi
 

@@ -5,19 +5,31 @@
 #
 set -euo pipefail
 
-SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+SCRIPT_NAME="$0"  
+SCRIPT_DIR="$(cd "$(dirname "${SCRIPT_NAME}")" && pwd)"
 
 # shellcheck source=load_config.sh
 source "${SCRIPT_DIR}/load_config.sh"
 
-HUDI_UTILITIES_JAR="${JARS_PATH}/hudi-utilities-slim-bundle_${SCALA_VERSION}-${HUDI_VERSION}.jar"
-HUDI_JARS_DELTA="${JARS_PATH}/hudi-spark${SPARK_MAJOR_VERSION}-bundle_${SCALA_VERSION}-${HUDI_VERSION}.jar,${HUDI_UTILITIES_JAR}"
+usage() {
+  echo ""
+  echo "Usage:"
+  echo "  bash $SCRIPT_NAME --table-type <COPY_ON_WRITE|MERGE_ON_READ> --target-hudi-version <0.14.1|0.14.2>"
+  echo ""
+  echo "Examples:"
+  echo "  bash $SCRIPT_NAME --table-type COPY_ON_WRITE --target-hudi-version 0.14.1"
+  echo "  bash $SCRIPT_NAME --table-type MERGE_ON_READ --target-hudi-version 0.14.2"
+  echo ""
+  exit 1
+}
 
 # Schema file: use file:// if local path
 SCHEMA_FILE_ARG="$SCHEMA_FILE"
 if [[ -n "$SCHEMA_FILE_ARG" && "$SCHEMA_FILE_ARG" != file://* && "$SCHEMA_FILE_ARG" != s3:* ]]; then
   SCHEMA_FILE_ARG="file://${SCHEMA_FILE}"
 fi
+
+TARGET_HUDI_VERSION="$HUDI_VERSION"
 
 while [[ $# -gt 0 ]]; do
   case $1 in
@@ -27,6 +39,14 @@ while [[ $# -gt 0 ]]; do
         usage
       fi
       TABLE_TYPE="$2"
+      shift 2
+      ;;
+    --target-hudi-version)
+      if [[ -z "$2" ]]; then
+        echo "❌ Error: --target-hudi-version requires a value"
+        usage
+      fi
+      TARGET_HUDI_VERSION="$2"
       shift 2
       ;;
     -h|--help)
@@ -65,10 +85,17 @@ esac
 
 TABLE_BASE_PATH="${DATA_PATH}/${TABLE_NAME}"
 
+HUDI_JARS_DELTA=$HUDI_JARS
+if [ "$TARGET_HUDI_VERSION" != "$HUDI_VERSION" ]; then 
+  HUDI_UTILITIES_JAR="${JARS_PATH}/hudi-utilities-slim-bundle_${SCALA_VERSION}-${TARGET_HUDI_VERSION}.jar"
+  HUDI_SPARK_JAR="${JARS_PATH}/hudi-spark${SPARK_MAJOR_VERSION}-bundle_${SCALA_VERSION}-${TARGET_HUDI_VERSION}.jar"
+  HUDI_JARS_DELTA="${HUDI_SPARK_JAR},${HUDI_UTILITIES_JAR}"
+fi 
+
 echo "======================================"
 echo "Running Delta Streamer"
 echo "--------------------------------------"
-echo "HUDI_VERSION    : $HUDI_VERSION"
+echo "HUDI_VERSION    : $TARGET_HUDI_VERSION"
 echo "TABLE_TYPE      : $TABLE_TYPE"
 echo "TABLE_NAME      : $TABLE_NAME"
 echo "TABLE_BASE_PATH : $TABLE_BASE_PATH"
