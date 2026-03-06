@@ -119,7 +119,7 @@ echo "Hudi Benchmark Jars: $HUDI_JARS_BENCH"
 # Run Spark Job
 ############################################
 
-"$SPARK_HOME/bin/spark-submit" \
+"${SPARK_HOME}"/bin/spark-submit \
   --master yarn \
   --deploy-mode client \
   --properties-file "${SPARK_DEFAULTS_CONF}" \

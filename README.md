@@ -29,6 +29,7 @@ Scripts source `load_config.sh`, which reads `common.properties` and exports the
 Run once on the cluster node (e.g. EMR master) to install Spark (if missing), AWS/S3 jars, and prepare the environment:
 
 ```sh
+tmux
 bash setup_node.sh
 ```
 
@@ -39,13 +40,13 @@ bash setup_node.sh
 ### 1. Generate initial parquet data
 
 ```sh
-bash run_ingestion_data_generator.sh --type initial
+bash run_parquet_ingestion.sh --type initial
 ```
 
 ### 2. Create initial Hudi COW table (0.14.1)
 
 ```sh
-bash run_delta_streamer_app.sh --table-type COPY_ON_WRITE --target-hudi-version 0.14.1
+bash run_hudi_ingestion.sh --table-type COPY_ON_WRITE --target-hudi-version 0.14.1
 ```
 
 ### 3. Read benchmarks with 0.14.1 and 0.14.2
@@ -58,13 +59,13 @@ bash test_hudi_benchmark.sh --table-type COPY_ON_WRITE --target-hudi-version 0.1
 ### 4. Generate incremental parquet data
 
 ```sh
-bash run_ingestion_data_generator.sh --type incremental
+bash run_parquet_ingestion.sh --type incremental
 ```
 
 ### 5. Apply incremental ingestion with 0.14.1
 
 ```sh
-bash run_delta_streamer_app.sh --table-type COPY_ON_WRITE --target-hudi-version 0.14.1
+bash run_hudi_ingestion.sh --table-type COPY_ON_WRITE --target-hudi-version 0.14.1
 ```
 
 ### 6. Read benchmarks again (both versions)
@@ -77,25 +78,25 @@ bash test_hudi_benchmark.sh --table-type COPY_ON_WRITE --target-hudi-version 0.1
 ### 7. Generate more incremental data
 
 ```sh
-bash run_ingestion_data_generator.sh --type incremental
+bash run_parquet_ingestion.sh --type incremental
 ```
 
 ### 8. Apply incremental ingestion with 0.14.2
 
 ```sh
-bash run_delta_streamer_app.sh --table-type COPY_ON_WRITE --target-hudi-version 0.14.2
+bash run_hudi_ingestion.sh --table-type COPY_ON_WRITE --target-hudi-version 0.14.2
 ```
 
 ### 9. Generate another incremental batch (optional)
 
 ```sh
-bash run_ingestion_data_generator.sh --type incremental
+bash run_parquet_ingestion.sh --type incremental
 ```
 
 ### 10. Apply again with 0.14.2 (optional)
 
 ```sh
-bash run_delta_streamer_app.sh --table-type COPY_ON_WRITE --target-hudi-version 0.14.2
+bash run_hudi_ingestion.sh --table-type COPY_ON_WRITE --target-hudi-version 0.14.2
 ```
 
 ### 11. Final read benchmarks (both versions)
@@ -114,13 +115,13 @@ Use the same flow as COW, but pass **`--table-type MERGE_ON_READ`** and use the 
 **Create initial MOR table (0.14.1):**
 
 ```sh
-bash run_delta_streamer_app.sh --table-type MERGE_ON_READ --target-hudi-version 0.14.1
+bash run_hudi_ingestion.sh --table-type MERGE_ON_READ --target-hudi-version 0.14.1
 ```
 
 **Create/update with 0.14.2:**
 
 ```sh
-bash run_delta_streamer_app.sh --table-type MERGE_ON_READ --target-hudi-version 0.14.2
+bash run_hudi_ingestion.sh --table-type MERGE_ON_READ --target-hudi-version 0.14.2
 ```
 
 **Read benchmarks (both versions):**
@@ -140,7 +141,7 @@ Data generation is shared: run **`run_ingestion_data_generator.sh --type initial
 |--------|--------|
 | `setup_node.sh` | One-time setup: Spark, AWS jars, env (no S3 jar download). |
 | `run_ingestion_data_generator.sh` | Generate parquet data: `--type initial` or `--type incremental`. |
-| `run_delta_streamer_app.sh` | Run Hudi Streamer: `--table-type COPY_ON_WRITE \| MERGE_ON_READ` and `--target-hudi-version 0.14.1 \| 0.14.2`. |
+| `run_hudi_ingestion.sh` | Run Hudi Streamer: `--table-type COPY_ON_WRITE \| MERGE_ON_READ` and `--target-hudi-version 0.14.1 \| 0.14.2`. |
 | `test_hudi_benchmark.sh` | Read benchmark: `--table-type COPY_ON_WRITE \| MERGE_ON_READ` and `--target-hudi-version 0.14.1 \| 0.14.2`. |
 
 Use `-h` or `--help` on any script for usage.
