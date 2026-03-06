@@ -67,8 +67,9 @@ load_config() {
   if [ -z "$HADOOP_CONF_DIR" ]; then
     export HADOOP_CONF_DIR=/etc/hadoop/conf
   fi
-  
+
+  if [ -z "${AWS_S3_JARS:-}" ]; then
+    export AWS_S3_JARS="${SPARK_HOME}/jars/aws-java-sdk-bundle.jar,${SPARK_HOME}/jars/hadoop-aws.jar"
+  fi 
   return 0
 }
-
-load_config

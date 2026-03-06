@@ -61,12 +61,16 @@ echo "SOURCE_DATA       : $SOURCE_DATA"
 echo "INGESTION_TYPE    : $INGESTION_TYPE"
 echo "======================================"
 
+if [ -z "${AWS_S3_JARS:-}" ]; then
+  export AWS_S3_JARS="${SPARK_HOME}/jars/aws-java-sdk-bundle.jar,${SPARK_HOME}/jars/hadoop-aws.jar"
+fi
+
 if [[ "$INGESTION_TYPE" == "initial" ]]; then
   echo "Running initial ingestion"
   "${SPARK_HOME}/bin/spark-shell" \
     --master yarn \
     --deploy-mode client \
-    --jars $SPARK_HOME/jars/aws-java-sdk-bundle.jar,$SPARK_HOME/jars/hadoop-aws.jar \
+    --jars $AWS_S3_JARS \
     --properties-file "${SPARK_DEFAULTS_CONF}" \
     --conf spark.sql.adaptive.enabled=true \
     --conf spark.hadoop.mapreduce.fileoutputcommitter.algorithm.version=2 \
@@ -78,7 +82,7 @@ else
   "${SPARK_HOME}/bin/spark-submit" \
     --master yarn \
     --deploy-mode client \
-    --jars $SPARK_HOME/jars/aws-java-sdk-bundle.jar,$SPARK_HOME/jars/hadoop-aws.jar \
+    --jars $AWS_S3_JARS \
     --properties-file "${SPARK_DEFAULTS_CONF}" \
     --conf spark.sql.adaptive.enabled=true \
     --conf spark.hadoop.mapreduce.fileoutputcommitter.algorithm.version=2 \
