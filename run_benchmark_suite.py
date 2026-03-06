@@ -40,9 +40,9 @@ CSV_HEADER = [
 ]
 SCRIPT_DIR = Path(os.path.dirname(os.path.abspath(__file__)))
 
-def read_and_increment_sequence(project_dir: Path) -> int:
+def read_and_increment_sequence() -> int:
     """Read current sequence from file, increment, write back, return new value."""
-    seq_file = project_dir / SEQUENCE_FILENAME
+    seq_file = SCRIPT_DIR / SEQUENCE_FILENAME
     try:
         with open(seq_file) as f:
             n = int(f.read().strip())
@@ -54,13 +54,13 @@ def read_and_increment_sequence(project_dir: Path) -> int:
     return n
 
 
-def run_benchmark(project_dir: Path, table_type: str, hudi_version: str) -> Tuple[Optional[float], Optional[int], str]:
+def run_benchmark(table_type: str, hudi_version: str) -> Tuple[Optional[float], Optional[int], str]:
     """
     Run run_hudi_benchmark.sh and parse output.
     Returns (execution_time_seconds, count, status).
     status is 'ok' or error message.
     """
-    script = project_dir / "run_hudi_benchmark.sh"
+    script = SCRIPT_DIR / "run_hudi_benchmark.sh"
     if not script.exists():
         return None, None, f"script not found: {script}"
 
@@ -74,7 +74,7 @@ def run_benchmark(project_dir: Path, table_type: str, hudi_version: str) -> Tupl
     try:
         result = subprocess.run(
             cmd,
-            cwd=str(project_dir),
+            cwd=str(SCRIPT_DIR),
             capture_output=True,
             text=True,
             timeout=3600,
@@ -145,7 +145,7 @@ def main() -> int:
         print("Need at least one table type and one hudi version.", file=sys.stderr)
         return 1
 
-    run_sequence = read_and_increment_sequence(SCRIPT_DIR)
+    run_sequence = read_and_increment_sequence()
     run_ts = datetime.now(timezone.utc).isoformat()[:19].replace("T", " ")
 
     output_path = Path(args.output)
@@ -155,7 +155,6 @@ def main() -> int:
     file_existed = output_path.exists()
 
     if args.dry_run:
-        print(f"Project dir: {SCRIPT_DIR}")
         print(f"Run sequence: {run_sequence}")
         print(f"Table type: {args.table_type}")
         print(f"Hudi versions: {hudi_versions}")
@@ -167,7 +166,7 @@ def main() -> int:
     rows = []  # type: List[Dict[str, Any]]
     for hudi_version in hudi_versions:
         print(f"[Run #{run_sequence}] {args.table_type} @ {hudi_version} ...", flush=True)
-        exec_time, count, status = run_benchmark(SCRIPT_DIR, args.table_type, hudi_version)
+        exec_time, count, status = run_benchmark(args.table_type, hudi_version)
         row = {
             "run_sequence": run_sequence,
             "table_type": args.table_type,
