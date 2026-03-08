@@ -81,6 +81,7 @@ E2E_STATE_DIR="${SCRIPT_DIR}/.e2e_state"
 E2E_STATE_FILE="${E2E_STATE_DIR}/state_${TABLE_TYPE_LOWER}_v${TARGET_VERSION}.txt"
 S3_STATE_FILE="${BASE_PATH}/e2e_state/state_${TABLE_TYPE_LOWER}_v${TARGET_VERSION}.txt"
 S3_CSV_FILE="${BASE_PATH}/hudi_benchmark_results.csv"
+S3_LOGS_DIR="${BASE_PATH}/logs"
 mkdir -p "$E2E_STATE_DIR"
 
 # Log file: all output from here goes to log and console
@@ -235,12 +236,17 @@ for ((BATCH_ID=0; BATCH_ID<TOTAL_BATCHES; BATCH_ID++)); do
     echo "---------------------------------------"
 done
 
-# Upload results to S3 at end (state file already uploaded after each step)
+# Upload results and log to S3 at end (state file already uploaded after each step)
 if [[ "$DRY_RUN" != true ]]; then
   if [[ -f "${SCRIPT_DIR}/hudi_benchmark_results.csv" ]]; then
     log_echo ""
     log_echo "Uploading hudi_benchmark_results.csv to S3: $S3_CSV_FILE"
     aws s3 cp "${SCRIPT_DIR}/hudi_benchmark_results.csv" "$S3_CSV_FILE" 2>&1 | tee -a "$LOG_FILE" || true
+  fi
+  if [[ -f "$LOG_FILE" ]]; then
+    S3_LOG_FILE="${S3_LOGS_DIR}/$(basename "$LOG_FILE")"
+    log_echo "Uploading log to S3: $S3_LOG_FILE"
+    aws s3 cp "$LOG_FILE" "$S3_LOG_FILE" 2>&1 | tee -a "$LOG_FILE" || true
   fi
   log_echo "E2E state synced to S3 after each step: $S3_STATE_FILE"
 fi
