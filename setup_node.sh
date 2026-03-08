@@ -42,7 +42,14 @@ download_hudi_jars() {
 }
 
 setup_spark() {
+  
   if [[ ! -d "$SPARK_HOME" ]]; then
+    EXISTING_SPARK_VERSION=$(spark-submit --version 2>&1 | awk '/version/ {split($NF,a,"."); print a[1]"."a[2]}' | head -1)
+    if [[ "$EXISTING_SPARK_VERSION" == "$SPARK_MAJOR_VERSION" ]]; then
+      echo "Spark $EXISTING_SPARK_VERSION is already installed"
+      return 0
+    fi
+
     echo "Installing Spark $SPARK_VERSION"
     SPARK_TAR_FILE="spark-${SPARK_VERSION}-bin-hadoop${HADOOP_MAJOR_VERSION}.tgz"
     SPARK_URL="https://archive.apache.org/dist/spark/spark-${SPARK_VERSION}/${SPARK_TAR_FILE}"
