@@ -37,7 +37,13 @@ bash setup_node.sh
 
 ## E2E performance test (single script)
 
-Runs the full flow in one go: **3 batches** (batch 0 = initial, batches 1–2 = incremental). For each batch: **generate parquet → Hudi ingestion → benchmark** (9 steps total). Versions come from **`common.properties`** (`SOURCE_HUDI_VERSION`, `TARGET_HUDI_VERSION`).
+Runs the full flow in one go: **4 batches** (batch 0 = initial, batches 1–3 = incremental). For each batch: **generate parquet → Hudi ingestion → benchmark** (**12 steps** total). Versions come from **`common.properties`** (`SOURCE_HUDI_VERSION`, `TARGET_HUDI_VERSION`).
+
+**Batch and version logic:**
+
+- **Batch 0:** Initial parquet + Hudi ingestion with **SOURCE_HUDI_VERSION** (e.g. 0.14.1), then benchmark.
+- **Batch 1:** Incremental parquet + Hudi ingestion with **SOURCE_HUDI_VERSION**, then benchmark.
+- **Batches 2–3:** Incremental parquet + Hudi ingestion with **TARGET_HUDI_VERSION** (e.g. 0.14.2), then benchmark.
 
 ```sh
 bash run_e2e_performance_test.sh --table-type COPY_ON_WRITE
@@ -58,8 +64,8 @@ bash run_e2e_performance_test.sh --table-type MERGE_ON_READ
 **State and resume:**
 
 - State is stored in **`.e2e_state/state_<table>_v<ver>.txt`** and synced to **S3** (`${BASE_PATH}/e2e_state/...`) after each step. If you re-run or move to another host, the script downloads state from S3 and skips steps that already succeeded; failed steps are retried.
-- Logs go to **`logs/e2e_<table>_v<ver>_<timestamp>.log`**.
-- At the end, **`hudi_benchmark_results.csv`** is uploaded to **`${BASE_PATH}/hudi_benchmark_results.csv`**.
+- Logs are written to **`logs/e2e_<table>_v<ver>_<timestamp>.log`** (local). At the end, the log file is uploaded to **`${BASE_PATH}/logs/`** on S3.
+- **`hudi_benchmark_results.csv`** is uploaded to **`${BASE_PATH}/hudi_benchmark_results.csv`** on S3.
 
 ---
 
@@ -72,6 +78,6 @@ bash run_e2e_performance_test.sh --table-type MERGE_ON_READ
 | `run_hudi_ingestion.sh` | Run Hudi Delta Streamer. **Required:** `--table-type COPY_ON_WRITE \| MERGE_ON_READ`, `--target-hudi-version`. **Optional:** `--batch-id <id>` (ingest only `SOURCE_DATA/batch_<id>`). |
 | `run_hudi_benchmark.sh` | Single read benchmark. **Required:** `--table-type`, `--target-hudi-version`. **Optional:** `--batch-id` (for CSV labeling when called by suite). |
 | `run_benchmark_suite.py` | Run benchmarks for multiple Hudi versions, append results to CSV with run sequence. |
-| `run_e2e_performance_test.sh` | **E2E:** 3 batches × (parquet → Hudi ingestion → benchmark). State synced to S3 after each step. |
+| `run_e2e_performance_test.sh` | **E2E:** 4 batches × (parquet → Hudi ingestion → benchmark) = 12 steps. State synced to S3 after each step; log and CSV uploaded to `${BASE_PATH}/logs/` and `${BASE_PATH}/hudi_benchmark_results.csv`. |
 
 Use **`-h`** or **`--help`** on any script for usage.

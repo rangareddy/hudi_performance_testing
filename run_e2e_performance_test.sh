@@ -7,12 +7,13 @@
 #   4. Two incremental cycles: (generate incremental data → Hudi ingestion → benchmark) × 2
 #
 # Usage:
-#   bash run_e2e_performance_test.sh --table-type COPY_ON_WRITE --target-hudi-version 0.14.1
-#   bash run_e2e_performance_test.sh --table-type MERGE_ON_READ --target-hudi-version 0.14.2 --hudi-versions 0.14.1,0.14.2
+#   bash run_e2e_performance_test.sh --table-type COPY_ON_WRITE
+#   bash run_e2e_performance_test.sh --table-type MERGE_ON_READ
 #
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+
 # shellcheck source=load_config.sh
 source "${SCRIPT_DIR}/load_config.sh"
 
