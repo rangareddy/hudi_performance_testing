@@ -72,15 +72,17 @@ if [[ "$INGESTION_TYPE" != "initial" ]] && [[ "$INGESTION_TYPE" != "incremental"
   exit 1
 fi
 
+# Convert ingestion type to title case means first letter is upper case and remainig lower case
+INGESTION_TYPE_TITLE=$(echo "$INGESTION_TYPE" | sed 's/.*/\u&/')
 export SOURCE_DATA
 
 echo "======================================"
-echo "Running $INGESTION_TYPE ingestion"
+echo "Running $INGESTION_TYPE_TITLE ingestion"
 echo "--------------------------------------"
 echo "SPARK_HOME        : $SPARK_HOME"
 echo "Script            : $INITIAL_BATCH_SCALA"
 echo "SOURCE_DATA       : $SOURCE_DATA"
-echo "INGESTION_TYPE    : $INGESTION_TYPE"
+echo "INGESTION_TYPE    : $INGESTION_TYPE_TITLE"
 echo "======================================"
 
 if [ -z "${SOURCE_DATA:-}" ]; then
@@ -91,7 +93,7 @@ fi
 export BATCH_ID
 export TARGET_DATA="${SOURCE_DATA}/batch_${BATCH_ID}"
 if aws s3 ls "$TARGET_DATA" > /dev/null 2>&1; then
-  echo "Already loaded data of $TARGET_DATA exists in s3 for ingestion type: $INGESTION_TYPE"
+  echo "Already loaded data of $TARGET_DATA exists in s3 for ingestion type: $INGESTION_TYPE_TITLE"
   echo "Skipping ingestion"
   exit 0
 fi
@@ -101,8 +103,11 @@ EXECTION_STATUS=0
 echo "Batch ID : $BATCH_ID"
 echo "Target data : $TARGET_DATA"
 
+export NUM_OF_COLUMNS=${NUM_OF_COLUMNS:-500}
+export NUM_OF_PARTITIONS=${NUM_OF_PARTITIONS:-10000}
+
 if [[ "$INGESTION_TYPE" == "initial" ]]; then
-  echo "Running initial ingestion"
+  echo "Running $INGESTION_TYPE_TITLE ingestion with $NUM_OF_COLUMNS columns and $NUM_OF_PARTITIONS partitions"
   "${SPARK_HOME}/bin/spark-shell" \
     --master yarn \
     --deploy-mode client \
@@ -114,7 +119,8 @@ if [[ "$INGESTION_TYPE" == "initial" ]]; then
     -i "$INITIAL_BATCH_SCALA"
     EXECTION_STATUS=$?
 else
-  echo "Running incremental ingestion"
+  export NUM_OF_RECORDS_TO_UPDATE=${NUM_OF_RECORDS_TO_UPDATE:-100}
+  echo "Running $INGESTION_TYPE_TITLE ingestion with $NUM_OF_RECORDS_TO_UPDATE records to update"
   export SOURCE_DATA="${SOURCE_DATA}/batch_0"
   "${SPARK_HOME}/bin/spark-submit" \
     --master yarn \
@@ -129,8 +135,8 @@ else
 fi
 
 if [ $EXECTION_STATUS -eq 0 ]; then
-  echo "✅ Ingestion of $INGESTION_TYPE completed (batch-id $BATCH_ID)."
+  echo "✅ Ingestion of $INGESTION_TYPE_TITLE completed (batch-id $BATCH_ID)."
 else
-  echo "❌ Ingestion of $INGESTION_TYPE failed. Batch ID $BATCH_ID."
+  echo "❌ Ingestion of $INGESTION_TYPE_TITLE failed. Batch ID $BATCH_ID."
   exit 1
 fi
