@@ -13,7 +13,7 @@ export SKIP_SPARK_HOME_CHECK=1
 # shellcheck source=load_config.sh
 source "${SCRIPT_DIR}/load_config.sh"
 export SPARK_MAJOR_VERSION=$(echo "${SPARK_VERSION}" | cut -d '.' -f 1,2)
-export HADOOP_MAJOR_VERSION=$(echo "${HADOOP_VERSION}" | cut -d '.' -f 1,2)
+export HADOOP_MAJOR_VERSION=$(echo "${HADOOP_VERSION}" | cut -d '.' -f 1)
 
 echo "======================================"
 echo "Hudi performance testing node setup"
@@ -30,13 +30,11 @@ echo "======================================"
 download_hudi_jars() {
   local hudi_version="$1"
   if [[ ! -f "$JARS_PATH/hudi-spark${SPARK_MAJOR_VERSION}-bundle_${SCALA_VERSION}-${hudi_version}.jar" ]]; then
-    wget -q https://repo1.maven.org/maven2/org/apache/hudi/hudi-spark${SPARK_MAJOR_VERSION}-bundle_${SCALA_VERSION}-${hudi_version}/hudi-spark${SPARK_MAJOR_VERSION}-bundle_${SCALA_VERSION}-${hudi_version}.jar \
-      -O "$JARS_PATH/hudi-spark${SPARK_MAJOR_VERSION}-bundle_${SCALA_VERSION}-${hudi_version}.jar"
+    aws s3 cp $S3_JARS_PATH/hudi-spark${SPARK_MAJOR_VERSION}-bundle_${SCALA_VERSION}-${hudi_version}.jar $JARS_PATH/hudi-spark${SPARK_MAJOR_VERSION}-bundle_${SCALA_VERSION}-${hudi_version}.jar
     echo "Hudi Spark Bundle jar downloaded for version $hudi_version successfully"
   fi
   if [[ ! -f "$JARS_PATH/hudi-utilities-slim-bundle_${SCALA_VERSION}-${hudi_version}.jar" ]]; then
-    wget -q https://repo1.maven.org/maven2/org/apache/hudi/hudi-utilities-slim-bundle_${SCALA_VERSION}-${hudi_version}/hudi-utilities-slim-bundle_${SCALA_VERSION}-${hudi_version}.jar \
-      -O "$JARS_PATH/hudi-utilities-slim-bundle_${SCALA_VERSION}-${hudi_version}.jar"
+    aws s3 cp $S3_JARS_PATH/hudi-utilities-slim-bundle_${SCALA_VERSION}-${hudi_version}.jar $JARS_PATH/hudi-utilities-slim-bundle_${SCALA_VERSION}-${hudi_version}.jar
     echo "Hudi Utilities Slim Bundle jar downloaded for version $hudi_version successfully"
   fi
 }
