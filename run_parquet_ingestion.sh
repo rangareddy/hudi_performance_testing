@@ -67,7 +67,7 @@ if [[ ! "$BATCH_ID" =~ ^[0-9]+$ ]]; then
 fi
 
 if [[ "$INGESTION_TYPE" != "initial" ]] && [[ "$INGESTION_TYPE" != "incremental" ]]; then
-  echo "❌ Invalid INGESTION_TYPE: $INGESTION_TYPE"
+  echo "❌ Invalid Ingestion Type: $INGESTION_TYPE"
   echo "Allowed values: initial or incremental"
   exit 1
 fi
@@ -76,38 +76,42 @@ fi
 INGESTION_TYPE_TITLE=$(echo "$INGESTION_TYPE" | sed 's/.*/\u&/')
 export SOURCE_DATA
 
-echo "======================================"
+EXECUTION_SCRIPT=$INCREMENTAL_SCRIPT
+if [[ "$INGESTION_TYPE" == "initial" ]]; then
+  EXECUTION_SCRIPT=$INITIAL_BATCH_SCALA
+fi
+
+echo "=============================================="
 echo "Running $INGESTION_TYPE_TITLE ingestion"
-echo "--------------------------------------"
-echo "SPARK_HOME        : $SPARK_HOME"
-echo "Script            : $INITIAL_BATCH_SCALA"
-echo "SOURCE_DATA       : $SOURCE_DATA"
-echo "INGESTION_TYPE    : $INGESTION_TYPE_TITLE"
-echo "======================================"
+echo "----------------------------------------------"
+echo "Script File       : $EXECUTION_SCRIPT"
+echo "Source Data       : $SOURCE_DATA"
+echo "Ingestion Type    : $INGESTION_TYPE_TITLE"
+echo "=============================================="
 
 if [ -z "${SOURCE_DATA:-}" ]; then
-  echo "❌ SOURCE_DATA not found in s3"
+  echo "❌ Source Data is not set"
   exit 1
 fi
 
 export BATCH_ID
 export TARGET_DATA="${SOURCE_DATA}/batch_${BATCH_ID}"
 if aws s3 ls "$TARGET_DATA" > /dev/null 2>&1; then
-  echo "Already loaded data of $TARGET_DATA exists in s3 for ingestion type: $INGESTION_TYPE_TITLE"
+  echo "Already loaded data of $TARGET_DATA exists in s3 for Ingestion Type: $INGESTION_TYPE_TITLE"
   echo "Skipping ingestion"
   exit 0
 fi
 
-EXECTION_STATUS=0
+EXECUTION_STATUS_CODE=0
 
 echo "Batch ID : $BATCH_ID"
-echo "Target data : $TARGET_DATA"
+echo "Target Data : $TARGET_DATA"
 
 export NUM_OF_COLUMNS=${NUM_OF_COLUMNS:-500}
 export NUM_OF_PARTITIONS=${NUM_OF_PARTITIONS:-10000}
 
 if [[ "$INGESTION_TYPE" == "initial" ]]; then
-  echo "Running $INGESTION_TYPE_TITLE ingestion with $NUM_OF_COLUMNS columns and $NUM_OF_PARTITIONS partitions"
+  echo "Running $INGESTION_TYPE_TITLE Ingestion with $NUM_OF_COLUMNS columns and $NUM_OF_PARTITIONS partitions"
   "${SPARK_HOME}/bin/spark-shell" \
     --master yarn \
     --deploy-mode client \
@@ -116,11 +120,11 @@ if [[ "$INGESTION_TYPE" == "initial" ]]; then
     --conf spark.sql.adaptive.enabled=true \
     --conf spark.hadoop.mapreduce.fileoutputcommitter.algorithm.version=2 \
     --conf spark.hadoop.fs.s3a.committer.name=directory \
-    -i "$INITIAL_BATCH_SCALA"
-    EXECTION_STATUS=$?
+    -i "$EXECUTION_SCRIPT"
+    EXECUTION_STATUS_CODE=$?
 else
   export NUM_OF_RECORDS_TO_UPDATE=${NUM_OF_RECORDS_TO_UPDATE:-100}
-  echo "Running $INGESTION_TYPE_TITLE ingestion with $NUM_OF_RECORDS_TO_UPDATE records to update"
+  echo "Running $INGESTION_TYPE_TITLE Ingestion with $NUM_OF_RECORDS_TO_UPDATE records to update"
   export SOURCE_DATA="${SOURCE_DATA}/batch_0"
   "${SPARK_HOME}/bin/spark-submit" \
     --master yarn \
@@ -130,11 +134,11 @@ else
     --conf spark.sql.adaptive.enabled=true \
     --conf spark.hadoop.mapreduce.fileoutputcommitter.algorithm.version=2 \
     --conf spark.hadoop.fs.s3a.committer.name=directory \
-    "$INCREMENTAL_SCRIPT"
-    EXECTION_STATUS=$?
+    "$EXECUTION_SCRIPT"
+    EXECUTION_STATUS_CODE=$?
 fi
 
-if [ $EXECTION_STATUS -eq 0 ]; then
+if [ $EXECUTION_STATUS_CODE -eq 0 ]; then
   echo "✅ Ingestion of $INGESTION_TYPE_TITLE completed (batch-id $BATCH_ID)."
 else
   echo "❌ Ingestion of $INGESTION_TYPE_TITLE failed. Batch ID $BATCH_ID."

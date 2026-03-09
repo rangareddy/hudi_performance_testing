@@ -108,8 +108,6 @@ log_echo "=============================================="
 log_echo "  Table type          : $TABLE_TYPE"
 log_echo "  Source Hudi version : $SOURCE_HUDI_VERSION"
 log_echo "  Target Hudi version : $TARGET_HUDI_VERSION"
-log_echo "  Dry run             : $DRY_RUN"
-log_echo "  Force (ignore state): $FORCE"
 log_echo "=============================================="
 
 get_step_status() {
