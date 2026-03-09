@@ -16,7 +16,7 @@ val numCols = sys.props.get("NUM_OF_COLUMNS").map(_.toInt).getOrElse(500)
 val numPartitions = sys.props.get("NUM_OF_PARTITIONS").map(_.toInt).getOrElse(10000) 
 val DEFAULT_TARGET="s3://performance-benchmark-datasets-us-west-2/hudi-bench/performance/logical_ts_perf/data/wide_500cols_10000parts"
 val outputPath = sys.env.getOrElse("TARGET_DATA", DEFAULT_TARGET)
-val enableLogicalTs: Boolean = sys.props.get("ENABLE_LOGICAL_TIMESTAMP").map(_.toBoolean).getOrElse(true)
+val enableLogicalTs: Boolean = sys.props.get("IS_LOGICAL_TIMESTAMP_ENABLED").map(_.toBoolean).getOrElse(true)
 
 val baseTime = LocalDateTime.now().truncatedTo(ChronoUnit.MILLIS)
 val zone = java.time.ZoneId.systemDefault()

@@ -101,7 +101,7 @@ log_info "Execution Script      : $EXECUTION_SCRIPT"
 log_info "Source Data Path      : $SOURCE_DATA"
 log_info "Target Data Path      : $TARGET_DATA"
 log_info "Batch ID              : $BATCH_ID"
-log_info "Is Logical Timestamp  : $ENABLE_LOGICAL_TIMESTAMP"
+log_info "Is Logical Timestamp  : $IS_LOGICAL_TIMESTAMP_ENABLED"
 log_equal
 
 EXECUTION_STATUS_CODE=0
