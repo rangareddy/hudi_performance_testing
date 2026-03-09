@@ -72,17 +72,15 @@ setup_spark() {
       log_info "Installing Hadoop AWS $HADOOP_VERSION for Spark $SPARK_VERSION"
       wget -q https://repo1.maven.org/maven2/org/apache/hadoop/hadoop-aws/$HADOOP_VERSION/$hadoop_aws_jar \
         -O "$SPARK_HOME/jars/$hadoop_aws_jar"
+      log_info "Hadoop AWS $HADOOP_VERSION for Spark $SPARK_VERSION installed successfully"
     fi
-    ln -sf "$SPARK_HOME/jars/$hadoop_aws_jar" "$SPARK_HOME/jars/hadoop-aws.jar"
-    log_info "Hadoop AWS $HADOOP_VERSION for Spark $SPARK_VERSION installed successfully"
     aws_java_sdk_bundle_jar="aws-java-sdk-bundle-$AWS_JAVA_SDK_BUNDLE_VERSION.jar"  
     if [[ ! -f "$SPARK_HOME/jars/$aws_java_sdk_bundle_jar" ]]; then
       log_info "Installing AWS Java SDK Bundle $AWS_JAVA_SDK_BUNDLE_VERSION for Spark $SPARK_VERSION"
       wget -q https://repo1.maven.org/maven2/com/amazonaws/aws-java-sdk-bundle/$AWS_JAVA_SDK_BUNDLE_VERSION/$aws_java_sdk_bundle_jar \
         -O "$SPARK_HOME/jars/$aws_java_sdk_bundle_jar"
+      log_info "AWS Java SDK Bundle $AWS_JAVA_SDK_BUNDLE_VERSION for Spark $SPARK_VERSION installed successfully"
     fi
-    ln -sf "$SPARK_HOME/jars/$aws_java_sdk_bundle_jar" "$SPARK_HOME/jars/aws-java-sdk-bundle.jar"
-    log_info "AWS Java SDK Bundle $AWS_JAVA_SDK_BUNDLE_VERSION for Spark $SPARK_VERSION installed successfully"
   fi
 }
 
