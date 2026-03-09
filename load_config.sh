@@ -4,6 +4,38 @@
 # Source this from other scripts: source "$(dirname "$0")/load_config.sh"
 # CONFIG_FILE can override the path to the properties file.
 #
+
+# Colors for Terminal
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[0;33m'
+BLUE='\033[0;34m'
+NC='\033[0m' # No Color
+
+log_time() {
+  date "+%Y-%m-%d %H:%M:%S"
+}
+
+log_info() {
+  local msg="$(log_time) [INFO ] $*"
+  echo "${BLUE}${msg}${NC}"
+}
+
+log_success() {
+  local msg="$(log_time) [SUCCESS] $*"
+  echo "${GREEN}${msg}${NC}"
+}
+
+log_warn() {
+  local msg="$(log_time) [WARN ] $*"
+  echo "${YELLOW}${msg}${NC}"
+}
+
+log_error() {
+  local msg="$(log_time) [ERROR] $*"
+  echo "${RED}${msg}${NC}" >&2
+}
+
 load_config() {
   local script_dir
   # Directory containing this loader (and common.properties)
@@ -11,7 +43,7 @@ load_config() {
   local config_file="${CONFIG_FILE:-${script_dir}/common.properties}"
 
   if [[ ! -f "$config_file" ]]; then
-    echo "Warning: config file not found: $config_file" >&2
+    log_warn "Warning: config file not found: $config_file" >&2
     return 1
   fi
 
@@ -31,8 +63,8 @@ load_config() {
 
   if [[ "${SKIP_SPARK_HOME_CHECK:-0}" != "1" ]]; then
     if [ ! -d "$SPARK_HOME" ]; then
-      echo "❌ Spark home not found: $SPARK_HOME"
-      echo "Please run setup_node.sh to install Spark"
+      log_error "❌ Spark home not found: $SPARK_HOME"
+      log_error "Please run setup_node.sh to install Spark"
       exit 1
     fi
   fi 

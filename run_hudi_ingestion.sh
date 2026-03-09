@@ -12,17 +12,17 @@ SCRIPT_DIR="$(cd "$(dirname "${SCRIPT_NAME}")" && pwd)"
 source "${SCRIPT_DIR}/load_config.sh"
 
 usage() {
-  echo ""
-  echo "Usage:"
-  echo "  bash $SCRIPT_NAME --table-type <COPY_ON_WRITE|MERGE_ON_READ> --target-hudi-version <0.14.1|0.14.2> [--batch-id <id>]"
-  echo ""
-  echo "Options:"
-  echo "  --batch-id    (optional) Ingest only parquet under SOURCE_DATA/batch_<id>; if omitted, use SOURCE_DATA as root."
-  echo ""
-  echo "Examples:"
-  echo "  bash $SCRIPT_NAME --table-type COPY_ON_WRITE --target-hudi-version 0.14.1"
-  echo "  bash $SCRIPT_NAME --table-type MERGE_ON_READ --target-hudi-version 0.14.2 --batch-id 1"
-  echo ""
+  log_info ""
+  log_info "Usage:"
+  log_info "  bash $SCRIPT_NAME --table-type <COPY_ON_WRITE|MERGE_ON_READ> --target-hudi-version <0.14.1|0.14.2> [--batch-id <id>]"
+  log_info ""
+  log_info "Options:"
+  log_info "  --batch-id    (optional) Ingest only parquet under SOURCE_DATA/batch_<id>; if omitted, use SOURCE_DATA as root."
+  log_info ""
+  log_info "Examples:"
+  log_info "  bash $SCRIPT_NAME --table-type COPY_ON_WRITE --target-hudi-version 0.14.1"
+  log_info "  bash $SCRIPT_NAME --table-type MERGE_ON_READ --target-hudi-version 0.14.2 --batch-id 1"
+  log_info ""
   exit 1
 }
 
@@ -39,7 +39,7 @@ while [[ $# -gt 0 ]]; do
   case $1 in
     --table-type)
       if [[ -z "$2" ]]; then
-        echo "❌ Error: --table-type requires a value"
+        log_error "❌ Error: --table-type requires a value"
         usage
       fi
       TABLE_TYPE="$2"
@@ -47,7 +47,7 @@ while [[ $# -gt 0 ]]; do
       ;;
     --target-hudi-version)
       if [[ -z "$2" ]]; then
-        echo "❌ Error: --target-hudi-version requires a value"
+        log_error "❌ Error: --target-hudi-version requires a value"
         usage
       fi
       TARGET_HUDI_VERSION="$2"
@@ -55,7 +55,7 @@ while [[ $# -gt 0 ]]; do
       ;;
     --batch-id)
       if [[ -z "$2" ]]; then
-        echo "❌ Error: --batch-id requires a value"
+        log_error "❌ Error: --batch-id requires a value"
         usage
       fi
       BATCH_ID_ARG="$2"
@@ -65,22 +65,18 @@ while [[ $# -gt 0 ]]; do
       usage
       ;;
     *)
-      echo "❌ Unknown option: $1"
+      log_error "❌ Unknown option: $1"
       usage
       ;;
   esac
 done
 
-echo "✅ Table Type: $TABLE_TYPE"
+log_success "✅ Table Type: $TABLE_TYPE"
 
 TABLE_TYPE_UPPER=$(echo "$TABLE_TYPE" | tr '[:lower:]' '[:upper:]')
 
 # Append Hudi version to table name (e.g. 0.14.1 -> 0_14)
 HUDI_VERSION_SUFFIX=$(echo "$TARGET_HUDI_VERSION" | sed 's/-.*//' | cut -d. -f1,2 | tr '.' '_')
-
-############################################
-# Validate Table Type
-############################################
 
 case "$TABLE_TYPE_UPPER" in
   COPY_ON_WRITE|COW)
@@ -92,42 +88,47 @@ case "$TABLE_TYPE_UPPER" in
     TABLE_NAME="${BASE_TABLE_NAME}_mor_${HUDI_VERSION_SUFFIX}"
     ;;
   *)
-    echo "❌ Invalid TABLE_TYPE: $TABLE_TYPE"
-    echo "Allowed values: COPY_ON_WRITE (cow) or MERGE_ON_READ (mor)"
+    log_error "❌ Invalid TABLE_TYPE: $TABLE_TYPE"
+    log_error "Allowed values: COPY_ON_WRITE (cow) or MERGE_ON_READ (mor)"
     exit 1
     ;;
 esac
 
 TABLE_BASE_PATH="${DATA_PATH}/${TABLE_NAME}"
 
-# Source path for streamer: one batch or full SOURCE_DATA
 if [[ -n "$BATCH_ID_ARG" ]]; then
   STREAMER_SOURCE_ROOT="${SOURCE_DATA}/batch_${BATCH_ID_ARG}"
 else
   STREAMER_SOURCE_ROOT="${SOURCE_DATA}"
 fi
 
-# Always set JARs for the target Hudi version (for --jars and for application JAR containing HoodieStreamer)
 HUDI_UTILITIES_JAR="${JARS_PATH}/hudi-utilities-slim-bundle_${SCALA_VERSION}-${TARGET_HUDI_VERSION}.jar"
 HUDI_SPARK_JAR="${JARS_PATH}/hudi-spark${SPARK_MAJOR_VERSION}-bundle_${SCALA_VERSION}-${TARGET_HUDI_VERSION}.jar"
+if [ ! -f "$HUDI_UTILITIES_JAR" ]; then
+  log_error "❌ Hudi Utilities Slim Bundle Jar not found: $HUDI_UTILITIES_JAR"
+  exit 1
+fi
+if [ ! -f "$HUDI_SPARK_JAR" ]; then
+  log_error "❌ Hudi Spark Bundle Jar not found: $HUDI_SPARK_JAR"
+  exit 1
+fi
 HUDI_JARS="${HUDI_SPARK_JAR},${HUDI_UTILITIES_JAR}" 
 
-echo "======================================"
-echo "Running Delta Streamer"
-echo "--------------------------------------"
-echo "HUDI_VERSION    : $TARGET_HUDI_VERSION"
-echo "TABLE_TYPE      : $TABLE_TYPE"
-echo "TABLE_NAME      : $TABLE_NAME"
-echo "TABLE_BASE_PATH : $TABLE_BASE_PATH"
-echo "SOURCE_DATA     : $SOURCE_DATA"
-echo "Streamer root   : $STREAMER_SOURCE_ROOT"
-echo "HUDI_JARS       : $HUDI_JARS"
-echo "======================================"
+log_info "============================================================================="
+log_info "Running Delta Streamer"
+log_info "-----------------------------------------------------------------------------"
+log_info "HUDI_VERSION    : $TARGET_HUDI_VERSION"
+log_info "TABLE_TYPE      : $TABLE_TYPE"
+log_info "TABLE_NAME      : $TABLE_NAME"
+log_info "TABLE_BASE_PATH : $TABLE_BASE_PATH"
+log_info "SOURCE_DATA     : $SOURCE_DATA"
+log_info "Streamer root   : $STREAMER_SOURCE_ROOT"
+log_info "HUDI_JARS       : $HUDI_JARS"
+log_info "============================================================================="
 
-# print the spark-submit command
-echo "Executing spark-submit command: "
-echo "------------------------------------------------------------------------------"
-echo "spark-submit command: $SPARK_HOME/bin/spark-submit \
+log_info "Executing spark-submit command: "
+log_info "------------------------------------------------------------------------------"
+log_info "spark-submit command: $SPARK_HOME/bin/spark-submit \
   --master yarn \
   --deploy-mode client \
   --jars "$HUDI_JARS" \
@@ -157,8 +158,7 @@ echo "spark-submit command: $SPARK_HOME/bin/spark-submit \
   --hoodie-conf hoodie.datasource.write.recordkey.field=col_1 \
   --hoodie-conf hoodie.datasource.write.precombine.field=col_1 \
   --hoodie-conf hoodie.datasource.write.partitionpath.field=partition_col"  
-echo "------------------------------------------------------------------------------"
-echo ""
+log_info "------------------------------------------------------------------------------"
 
 time "${SPARK_HOME}/bin/spark-submit" \
   --master yarn \
@@ -191,4 +191,11 @@ time "${SPARK_HOME}/bin/spark-submit" \
   --hoodie-conf hoodie.datasource.write.precombine.field=col_1 \
   --hoodie-conf hoodie.datasource.write.partitionpath.field=partition_col
 
-echo "✅ Delta Streamer run completed"
+if [ $? -eq 0 ]; then
+  log_success "✅ Hudi Ingestion job completed successfully"
+else
+  log_error "❌ Hudi Ingestion job failed"
+  log_info "------------------------------------------------------------------------------"
+  exit 1
+fi
+log_info "------------------------------------------------------------------------------"

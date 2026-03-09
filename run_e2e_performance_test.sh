@@ -136,7 +136,6 @@ set_step_status() {
   fi
   echo "${step_id}=${status}" >> "$tmp_file"
   mv "$tmp_file" "$E2E_STATE_FILE"
-  # Upload state to S3 after each step so we can resume from another host or after failure
   if [[ -f "$E2E_STATE_FILE" ]] && [[ "$DRY_RUN" != true ]]; then
     aws s3 cp "$E2E_STATE_FILE" "$S3_STATE_FILE" 2>&1 | tee -a "$LOG_FILE" || true
   fi
@@ -148,8 +147,6 @@ run_step() {
   shift 2
   local status
   status=$(get_step_status "$step_id")
-
-  # Skip only if already succeeded and not --force
   if [[ "$FORCE" != true ]] && [[ "$status" == "success" ]]; then
     log_echo ""
     log_echo "--------------------------------------"
@@ -175,10 +172,10 @@ run_step() {
   fi
   if log_run "$@"; then
     set_step_status "$step_id" "success"
-    log_echo "    ✅ Success (state saved)"
+    log_echo "✅ Success (state saved)"
   else
     set_step_status "$step_id" "failure"
-    log_echo "    ❌ Failed (state saved; will retry this step next run)"
+    log_echo "❌ Failed (state saved; will retry this step next run)"
     return 1
   fi
 }
@@ -197,16 +194,13 @@ for ((BATCH_ID=0; BATCH_ID<TOTAL_BATCHES; BATCH_ID++)); do
     echo "Processing batch $BATCH_ID..."
     echo "---------------------------------------"
 
-    if [[ "$BATCH_ID" -lt 2 ]]; then
-      if [[ "$BATCH_ID" == 0 ]]; then
-        job_type="initial"
-        run_hudi_version="$SOURCE_HUDI_VERSION"
-      else
-        job_type="incremental"
-        run_hudi_version="$SOURCE_HUDI_VERSION"
-      fi
+    job_type="incremental"
+    if [[ "$BATCH_ID" == 0 ]]; then
+      job_type="initial"
+      run_hudi_version="$SOURCE_HUDI_VERSION"
+    elif [[ "$BATCH_ID" == 1 ]]; then
+      run_hudi_version="$SOURCE_HUDI_VERSION"
     else
-      job_type="incremental"
       run_hudi_version="$TARGET_HUDI_VERSION"
     fi
 
