@@ -31,6 +31,11 @@ Run once on the cluster node (e.g. EMR master) to install Spark (if missing), AW
 ```sh
 sudo yum install tmux -y
 tmux
+
+aws s3 cp s3://performance-benchmark-datasets-us-west-2/hudi-bench/performance/logical_ts_perf/source_code/hudi_performace_testing.zip .
+
+unzip hudi_performace_testing.zip
+cd hudi_performace_testing
 bash setup_node.sh
 # tmux attach (reconnect)
 ```
