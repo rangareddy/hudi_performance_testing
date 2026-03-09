@@ -15,9 +15,9 @@ source "${SCRIPT_DIR}/load_config.sh"
 export SPARK_MAJOR_VERSION=$(echo "${SPARK_VERSION}" | cut -d '.' -f 1,2)
 export HADOOP_MAJOR_VERSION=$(echo "${HADOOP_VERSION}" | cut -d '.' -f 1)
 
-log_info "======================================"
+log_equal
 log_info "Hudi performance testing node setup"
-log_info "--------------------------------------"
+log_hipen
 log_info "SOURCE_HUDI_VERSION  : ${SOURCE_HUDI_VERSION}"
 log_info "TARGET_HUDI_VERSION  : ${TARGET_HUDI_VERSION}"
 log_info "SPARK_VERSION        : ${SPARK_VERSION}"
@@ -25,7 +25,7 @@ log_info "BASE_PATH            : ${BASE_PATH}"
 log_info "JARS_PATH            : ${JARS_PATH}"
 log_info "DATA_PATH            : ${DATA_PATH}"
 log_info "SCRIPTS_DIR          : ${SCRIPTS_DIR}"
-log_info "======================================"
+log_equal
 
 download_hudi_jars() {
   local hudi_version="$1"

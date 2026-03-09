@@ -5,35 +5,36 @@
 # CONFIG_FILE can override the path to the properties file.
 #
 
-# Colors for Terminal
-RED='\033[0;31m'
-GREEN='\033[0;32m'
-YELLOW='\033[0;33m'
-BLUE='\033[0;34m'
-NC='\033[0m' # No Color
-
 log_time() {
   date "+%Y-%m-%d %H:%M:%S"
 }
 
+log_equal() {
+  echo "============================================================================="
+}
+
+log_hipen() {
+  echo "-----------------------------------------------------------------------------"
+}
+
 log_info() {
   local msg="$(log_time) [INFO ] $*"
-  echo "${BLUE}${msg}${NC}"
+  echo "$msg"
 }
 
 log_success() {
   local msg="$(log_time) [SUCCESS] $*"
-  echo "${GREEN}${msg}${NC}"
+  echo "$msg"
 }
 
 log_warn() {
   local msg="$(log_time) [WARN ] $*"
-  echo "${YELLOW}${msg}${NC}"
+  echo "$msg"
 }
 
 log_error() {
   local msg="$(log_time) [ERROR] $*"
-  echo "${RED}${msg}${NC}" >&2
+  echo "$msg" >&2
 }
 
 load_config() {

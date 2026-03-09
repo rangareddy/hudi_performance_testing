@@ -93,15 +93,15 @@ if [[ "$INGESTION_TYPE" == "initial" ]]; then
   EXECUTION_SCRIPT=$INITIAL_BATCH_SCALA
 fi
 
-log_info "=============================================="
+log_equal
 log_info "Starting ${INGESTION_TYPE_TITLE} ingestion job"
-log_info "----------------------------------------------"
+log_hipen
 log_info "Ingestion Type    : $INGESTION_TYPE_TITLE"
 log_info "Execution Script  : $EXECUTION_SCRIPT"
 log_info "Source Data Path  : $SOURCE_DATA"
 log_info "Target Data Path  : $TARGET_DATA"
 log_info "Batch ID          : $BATCH_ID"
-log_info "=============================================="
+log_equal
 
 EXECUTION_STATUS_CODE=0
 export NUM_OF_COLUMNS=${NUM_OF_COLUMNS:-500}
@@ -138,11 +138,11 @@ else
 fi
 
 log_basic_info() {
-  log_info "------------------------------------------------------------------------------"
+  log_hipen
   log_info "Ingestion Type : ${INGESTION_TYPE_TITLE}"
   log_info "Batch ID       : ${BATCH_ID}"
   log_info "Target Path    : ${TARGET_DATA}"
-  log_info "------------------------------------------------------------------------------"
+  log_hipen
 }
 
 if [ $EXECUTION_STATUS_CODE -eq 0 ]; then

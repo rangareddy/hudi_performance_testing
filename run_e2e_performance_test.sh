@@ -18,15 +18,15 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 source "${SCRIPT_DIR}/load_config.sh"
 
 usage() {
-  echo ""
-  echo "Usage:"
-  echo "  bash $0 --table-type <COPY_ON_WRITE|MERGE_ON_READ> [--dry-run]"
-  echo ""
-  echo "Options:"
-  echo "  --table-type           COPY_ON_WRITE or MERGE_ON_READ (for Hudi table and benchmark)."
-  echo "  --dry-run              Print the plan only, do not run any step."
-  echo "  --force               Ignore saved state and run all steps (default: skip steps that already succeeded)."
-  echo ""
+  log_info ""
+  log_info "Usage:"
+  log_info "  bash $0 --table-type <COPY_ON_WRITE|MERGE_ON_READ> [--dry-run]"
+  log_info ""
+  log_info "Options:"
+  log_info "  --table-type      COPY_ON_WRITE or MERGE_ON_READ (for Hudi table and benchmark)."
+  log_info "  --dry-run         Print the plan only, do not run any step."
+  log_info "  --force           Ignore saved state and run all steps (default: skip steps that already succeeded)."
+  log_info ""
   exit 1
 }
 
@@ -38,7 +38,7 @@ FORCE=false
 while [[ $# -gt 0 ]]; do
   case $1 in
     --table-type)
-      [[ -z "${2:-}" ]] && { echo "❌ Error: --table-type requires a value"; usage; }
+      [[ -z "${2:-}" ]] && { log_error "❌ Error: --table-type requires a value"; usage; }
       TABLE_TYPE="$2"
       shift 2
       ;;
@@ -54,14 +54,14 @@ while [[ $# -gt 0 ]]; do
       usage
       ;;
     *)
-      echo "❌ Unknown option: $1"
+      log_error "❌ Unknown option: $1"
       usage
       ;;
   esac
 done
 
 if [[ -z "$TABLE_TYPE" ]]; then
-  echo "❌ Error: --table-type is required"
+  log_error "❌ Error: --table-type is required"
   usage
 fi
 
@@ -70,7 +70,7 @@ case "$TABLE_TYPE_UPPER" in
   COPY_ON_WRITE|COW) TABLE_TYPE="COPY_ON_WRITE" ;;
   MERGE_ON_READ|MOR) TABLE_TYPE="MERGE_ON_READ" ;;
   *)
-    echo "❌ Invalid --table-type: $TABLE_TYPE"
+    log_error "❌ Invalid --table-type: $TABLE_TYPE"
     usage
     ;;
 esac
@@ -89,6 +89,7 @@ mkdir -p "$E2E_STATE_DIR"
 LOG_DIR="${SCRIPT_DIR}/logs"
 mkdir -p "$LOG_DIR"
 LOG_FILE="${LOG_DIR}/e2e_${TABLE_TYPE_LOWER}_v${TARGET_VERSION}_$(date +%Y%m%d_%H%M%S).log"
+
 # Create log file and write all output to it (and console) via helper
 : > "$LOG_FILE"
 log_echo() { printf '%s\n' "$*" | tee -a "$LOG_FILE"; }
@@ -99,16 +100,15 @@ log_echo "Log file: $LOG_FILE"
 # If state file exists on S3, download to local so we resume from last run
 if aws s3 ls "$S3_STATE_FILE" &>/dev/null; then
   log_echo "Downloading existing state from S3: $S3_STATE_FILE"
-  aws s3 cp "$S3_STATE_FILE" "$E2E_STATE_FILE" 2>&1 | tee -a "$LOG_FILE" || true
+  aws s3 cp "$S3_STATE_FILE" "$E2E_STATE_FILE" --only-show-errors 2>&1 | tee -a "$LOG_FILE" || true
 fi
 
-log_echo "=============================================="
-log_echo "  E2E Hudi Performance Test"
-log_echo "=============================================="
-log_echo "  Table type          : $TABLE_TYPE"
-log_echo "  Source Hudi version : $SOURCE_HUDI_VERSION"
-log_echo "  Target Hudi version : $TARGET_HUDI_VERSION"
-log_echo "=============================================="
+log_equal
+log_info "  E2E Hudi Performance Test"
+log_info "  Table type          : $TABLE_TYPE"
+log_info "  Source Hudi version : $SOURCE_HUDI_VERSION"
+log_info "  Target Hudi version : $TARGET_HUDI_VERSION"
+log_equal
 
 get_step_status() {
   local step_id="$1"
@@ -137,7 +137,7 @@ set_step_status() {
   echo "${step_id}=${status}" >> "$tmp_file"
   mv "$tmp_file" "$E2E_STATE_FILE"
   if [[ -f "$E2E_STATE_FILE" ]] && [[ "$DRY_RUN" != true ]]; then
-    aws s3 cp "$E2E_STATE_FILE" "$S3_STATE_FILE" 2>&1 | tee -a "$LOG_FILE" || true
+    aws s3 cp "$E2E_STATE_FILE" "$S3_STATE_FILE" --only-show-errors 2>&1 | tee -a "$LOG_FILE" || true
   fi
 }
 
@@ -148,17 +148,15 @@ run_step() {
   local status
   status=$(get_step_status "$step_id")
   if [[ "$FORCE" != true ]] && [[ "$status" == "success" ]]; then
-    log_echo ""
-    log_echo "--------------------------------------"
+    log_hipen
     log_echo ">>> $step_name [SKIPPED - already succeeded]"
-    log_echo "--------------------------------------"
+    log_hipen
     return 0
   fi
 
   if [[ "$status" == "failure" ]]; then
-    log_echo ""
     log_echo ">>> $step_name [RETRY - previous run failed]"
-    log_echo "--------------------------------------"
+    log_hipen
   elif [[ "$FORCE" == true ]]; then
     log_echo ""
     log_echo ">>> $step_name [FORCE - running regardless of state]"
@@ -190,9 +188,9 @@ TOTAL_BATCHES=4
 TOTAL_STEPS=$((TOTAL_BATCHES * 3))
 
 for ((BATCH_ID=0; BATCH_ID<TOTAL_BATCHES; BATCH_ID++)); do
-    echo "---------------------------------------"
-    echo "Processing batch $BATCH_ID..."
-    echo "---------------------------------------"
+    log_hipen
+    log_echo "Processing batch $BATCH_ID..."
+    log_hipen
 
     job_type="incremental"
     if [[ "$BATCH_ID" == 0 ]]; then
@@ -224,29 +222,27 @@ for ((BATCH_ID=0; BATCH_ID<TOTAL_BATCHES; BATCH_ID++)); do
       --hudi-versions "$HUDI_VERSIONS" \
       --batch-id $BATCH_ID
 
-    echo "---------------------------------------"
-    echo "Batch $BATCH_ID processing completed"
-    echo "---------------------------------------"
+    log_hipen
+    log_info "Batch $BATCH_ID processing completed"
+    log_hipen
 done
 
 # Upload results and log to S3 at end (state file already uploaded after each step)
 if [[ "$DRY_RUN" != true ]]; then
   if [[ -f "${SCRIPT_DIR}/hudi_benchmark_results.csv" ]]; then
-    log_echo ""
     log_echo "Uploading hudi_benchmark_results.csv to S3: $S3_CSV_FILE"
-    aws s3 cp "${SCRIPT_DIR}/hudi_benchmark_results.csv" "$S3_CSV_FILE" 2>&1 | tee -a "$LOG_FILE" || true
+    aws s3 cp "${SCRIPT_DIR}/hudi_benchmark_results.csv" "$S3_CSV_FILE" --only-show-errors 2>&1 | tee -a "$LOG_FILE" || true
   fi
   if [[ -f "$LOG_FILE" ]]; then
     S3_LOG_FILE="${S3_LOGS_DIR}/$(basename "$LOG_FILE")"
     log_echo "Uploading log to S3: $S3_LOG_FILE"
-    aws s3 cp "$LOG_FILE" "$S3_LOG_FILE" 2>&1 | tee -a "$LOG_FILE" || true
+    aws s3 cp "$LOG_FILE" "$S3_LOG_FILE" --only-show-errors 2>&1 | tee -a "$LOG_FILE" || true
   fi
   log_echo "E2E state synced to S3 after each step: $S3_STATE_FILE"
 fi
 
-log_echo ""
-log_echo "=============================================="
-log_echo "  ✅ E2E performance test completed"
-log_echo "  Report  : ${SCRIPT_DIR}/hudi_benchmark_results.csv"
-log_echo "  Log file: $LOG_FILE"
-log_echo "=============================================="
+log_equal
+log_echo "E2E performance test completed"
+log_info "Report  : ${SCRIPT_DIR}/hudi_benchmark_results.csv"
+log_info "Log file: $LOG_FILE"
+log_equal

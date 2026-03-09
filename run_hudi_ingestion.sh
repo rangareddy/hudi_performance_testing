@@ -114,9 +114,9 @@ if [ ! -f "$HUDI_SPARK_JAR" ]; then
 fi
 HUDI_JARS="${HUDI_SPARK_JAR},${HUDI_UTILITIES_JAR}" 
 
-log_info "============================================================================="
+log_equal
 log_info "Running Delta Streamer"
-log_info "-----------------------------------------------------------------------------"
+log_hipen
 log_info "HUDI_VERSION    : $TARGET_HUDI_VERSION"
 log_info "TABLE_TYPE      : $TABLE_TYPE"
 log_info "TABLE_NAME      : $TABLE_NAME"
@@ -124,10 +124,11 @@ log_info "TABLE_BASE_PATH : $TABLE_BASE_PATH"
 log_info "SOURCE_DATA     : $SOURCE_DATA"
 log_info "Streamer root   : $STREAMER_SOURCE_ROOT"
 log_info "HUDI_JARS       : $HUDI_JARS"
-log_info "============================================================================="
+log_equal
 
 log_info "Executing spark-submit command: "
-log_info "------------------------------------------------------------------------------"
+log_hipen
+
 log_info "spark-submit command: $SPARK_HOME/bin/spark-submit \
   --master yarn \
   --deploy-mode client \
@@ -158,7 +159,7 @@ log_info "spark-submit command: $SPARK_HOME/bin/spark-submit \
   --hoodie-conf hoodie.datasource.write.recordkey.field=col_1 \
   --hoodie-conf hoodie.datasource.write.precombine.field=col_1 \
   --hoodie-conf hoodie.datasource.write.partitionpath.field=partition_col"  
-log_info "------------------------------------------------------------------------------"
+log_hipen
 
 time "${SPARK_HOME}/bin/spark-submit" \
   --master yarn \
@@ -195,7 +196,7 @@ if [ $? -eq 0 ]; then
   log_success "✅ Hudi Ingestion job completed successfully"
 else
   log_error "❌ Hudi Ingestion job failed"
-  log_info "------------------------------------------------------------------------------"
+  log_hipen
   exit 1
 fi
-log_info "------------------------------------------------------------------------------"
+log_hipen

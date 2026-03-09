@@ -93,7 +93,7 @@ if [ ! -f "$HUDI_SPARK_BUNDLE_JAR" ]; then
   exit 1
 fi
 
-log_info "============================================================================="
+log_equal "============================================================================="
 log_info "🚀 Starting Hudi Benchmark"
 log_info "-----------------------------------------------------------------------------"
 log_info "Hudi Version      : $TARGET_HUDI_VERSION"
@@ -102,10 +102,10 @@ log_info "Data Path         : $BENCH_DATA_PATH"
 log_info "Spark Home        : $SPARK_HOME"
 log_info "Script Path       : $PY_SCRIPT"
 log_info "Hudi Spark Jar    : $HUDI_SPARK_BUNDLE_JAR"
-log_info "============================================================================="
+log_equal "============================================================================="
 
 log_info "Executing spark-submit command: "
-log_info "------------------------------------------------------------------------------"
+log_hipen "------------------------------------------------------------------------------"
 log_info "${SPARK_HOME}"/bin/spark-submit \
   --master yarn \
   --deploy-mode client \
@@ -117,7 +117,7 @@ log_info "${SPARK_HOME}"/bin/spark-submit \
   --conf "spark.sql.adaptive.enabled=true" \
   "$PY_SCRIPT" \
   "$BENCH_DATA_PATH"
-log_info "------------------------------------------------------------------------------"
+log_hipen "------------------------------------------------------------------------------"
 
 "${SPARK_HOME}"/bin/spark-submit \
   --master yarn \
@@ -135,7 +135,7 @@ if [ $? -eq 0 ]; then
   log_success "✅ Benchmark job completed successfully"
 else
   log_error "❌ Benchmark job failed"
-  log_info "------------------------------------------------------------------------------"
+  log_hipen "------------------------------------------------------------------------------"
   exit 1
 fi
-log_info "------------------------------------------------------------------------------"
+log_hipen "------------------------------------------------------------------------------"
