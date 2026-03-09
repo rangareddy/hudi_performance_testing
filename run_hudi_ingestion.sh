@@ -86,6 +86,7 @@ TABLE_TYPE_UPPER=$(echo "$TABLE_TYPE" | tr '[:lower:]' '[:upper:]')
 
 # Append Hudi version to table name (e.g. 0.14.1 -> 0_14)
 HUDI_VERSION_SUFFIX=$(echo "$TARGET_HUDI_VERSION" | sed 's/-.*//' | cut -d. -f1,2 | tr '.' '_')
+IS_LOGICAL_TIMESTAMP_ENABLED=${IS_LOGICAL_TIMESTAMP_ENABLED:-true}
 
 case "$TABLE_TYPE_UPPER" in
   COPY_ON_WRITE|COW)
@@ -102,6 +103,10 @@ case "$TABLE_TYPE_UPPER" in
     exit 1
     ;;
 esac
+
+if [[ "$IS_LOGICAL_TIMESTAMP_ENABLED" == true ]]; then
+  TABLE_NAME="${TABLE_NAME}_lts"
+fi
 
 TABLE_BASE_PATH="${DATA_PATH}/${TABLE_NAME}"
 
