@@ -92,6 +92,14 @@ EXECUTION_SCRIPT=$INCREMENTAL_SCRIPT
 if [[ "$INGESTION_TYPE" == "initial" ]]; then
   EXECUTION_SCRIPT=$INITIAL_BATCH_SCALA
 fi
+if [[ ! -f "$EXECUTION_SCRIPT" ]]; then
+  log_error "❌ Execution script not found: $EXECUTION_SCRIPT"
+  exit 1
+fi
+if [[ ! -f "$SPARK_DEFAULTS_CONF" ]]; then
+  log_error "❌ Spark defaults config not found: $SPARK_DEFAULTS_CONF"
+  exit 1
+fi
 
 log_equal
 log_info "Starting ${INGESTION_TYPE_TITLE} ingestion job"
@@ -112,7 +120,7 @@ log_info "Executing $INGESTION_TYPE_TITLE ingestion"
 log_info "Dataset configuration: columns=${NUM_OF_COLUMNS}, partitions=${NUM_OF_PARTITIONS}"
 
 if [[ "$INGESTION_TYPE" == "initial" ]]; then
-  "${SPARK_HOME}/bin/spark-shell" \
+  if "${SPARK_HOME}/bin/spark-shell" \
     --master yarn \
     --deploy-mode client \
     --jars $AWS_S3_JARS \
@@ -121,12 +129,16 @@ if [[ "$INGESTION_TYPE" == "initial" ]]; then
     --conf spark.hadoop.mapreduce.fileoutputcommitter.algorithm.version=2 \
     --conf spark.hadoop.fs.s3a.committer.name=directory \
     -i "$EXECUTION_SCRIPT"
+  then
+    EXECUTION_STATUS_CODE=0
+  else
     EXECUTION_STATUS_CODE=$?
+  fi
 else
   export NUM_OF_RECORDS_TO_UPDATE=${NUM_OF_RECORDS_TO_UPDATE:-100}
   export SOURCE_DATA="${SOURCE_DATA}/batch_0"
   log_info "Records to update per batch: ${NUM_OF_RECORDS_TO_UPDATE}"
-  "${SPARK_HOME}/bin/spark-submit" \
+  if "${SPARK_HOME}/bin/spark-submit" \
     --master yarn \
     --deploy-mode client \
     --jars $AWS_S3_JARS \
@@ -135,7 +147,11 @@ else
     --conf spark.hadoop.mapreduce.fileoutputcommitter.algorithm.version=2 \
     --conf spark.hadoop.fs.s3a.committer.name=directory \
     "$EXECUTION_SCRIPT"
+  then
+    EXECUTION_STATUS_CODE=0
+  else
     EXECUTION_STATUS_CODE=$?
+  fi
 fi
 
 log_basic_info() {

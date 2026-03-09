@@ -88,6 +88,14 @@ esac
 BENCH_DATA_PATH="${BASE_DATA_PATH}/$TABLE_NAME"
 
 export HUDI_SPARK_BUNDLE_JAR="${JARS_PATH}/hudi-spark${SPARK_MAJOR_VERSION}-bundle_${SCALA_VERSION}-${TARGET_HUDI_VERSION}.jar"
+if [ ! -f "$PY_SCRIPT" ]; then
+  log_error "❌ Benchmark script not found: $PY_SCRIPT"
+  exit 1
+fi
+if [ ! -f "$SPARK_DEFAULTS_CONF" ]; then
+  log_error "❌ Spark defaults config not found: $SPARK_DEFAULTS_CONF"
+  exit 1
+fi
 if [ ! -f "$HUDI_SPARK_BUNDLE_JAR" ]; then
   log_error "❌ Hudi Spark Bundle Jar not found: $HUDI_SPARK_BUNDLE_JAR"
   exit 1
@@ -119,7 +127,7 @@ log_info "${SPARK_HOME}"/bin/spark-submit \
   "$BENCH_DATA_PATH"
 log_hipen "------------------------------------------------------------------------------"
 
-"${SPARK_HOME}"/bin/spark-submit \
+if "${SPARK_HOME}"/bin/spark-submit \
   --master yarn \
   --deploy-mode client \
   --properties-file "${SPARK_DEFAULTS_CONF}" \
@@ -130,8 +138,7 @@ log_hipen "---------------------------------------------------------------------
   --conf "spark.sql.adaptive.enabled=true" \
   "$PY_SCRIPT" \
   "$BENCH_DATA_PATH"
-
-if [ $? -eq 0 ]; then
+then
   log_success "✅ Benchmark job completed successfully"
 else
   log_error "❌ Benchmark job failed"

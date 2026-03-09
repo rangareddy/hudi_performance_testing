@@ -25,3 +25,4 @@ replay_pid*
 
 # E2E performance test state (per table_type success/failure)
 .e2e_state/
+.pycache

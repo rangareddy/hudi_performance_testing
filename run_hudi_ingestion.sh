@@ -71,7 +71,16 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
+if [[ -z "${TABLE_TYPE:-}" ]]; then
+  log_error "❌ Error: --table-type is required"
+  usage
+fi
 log_success "✅ Table Type: $TABLE_TYPE"
+
+if [[ -n "$BATCH_ID_ARG" ]] && [[ ! "$BATCH_ID_ARG" =~ ^[0-9]+$ ]]; then
+  log_error "❌ Error: --batch-id must be a non-negative integer"
+  exit 1
+fi
 
 TABLE_TYPE_UPPER=$(echo "$TABLE_TYPE" | tr '[:lower:]' '[:upper:]')
 

@@ -2,7 +2,7 @@ import org.apache.spark.sql.{SparkSession, Row}
 import org.apache.spark.sql.types._
 import java.time.LocalDateTime
 import java.time.temporal.ChronoUnit
-import java.sql.Timestamp
+import java.sql.{Date, Timestamp}
 
 // Create Spark session
 val spark = SparkSession.builder()
@@ -11,12 +11,12 @@ val spark = SparkSession.builder()
 
 import spark.implicits._
 
-val batchId: Int = sys.props.get("BATCH_ID").map(_.toInt).getOrElse(1)
-val numCols = sys.props.get("NUM_OF_COLUMNS").map(_.toInt).getOrElse(500)
-val numPartitions = sys.props.get("NUM_OF_PARTITIONS").map(_.toInt).getOrElse(10000) 
+val batchId: Int = sys.env.get("BATCH_ID").map(_.toInt).getOrElse(0)
+val numCols = sys.env.get("NUM_OF_COLUMNS").map(_.toInt).getOrElse(500)
+val numPartitions = sys.env.get("NUM_OF_PARTITIONS").map(_.toInt).getOrElse(10000)
 val DEFAULT_TARGET="s3://performance-benchmark-datasets-us-west-2/hudi-bench/performance/logical_ts_perf/data/wide_500cols_10000parts"
 val outputPath = sys.env.getOrElse("TARGET_DATA", DEFAULT_TARGET)
-val enableLogicalTs: Boolean = sys.props.get("IS_LOGICAL_TIMESTAMP_ENABLED").map(_.toBoolean).getOrElse(true)
+val enableLogicalTs: Boolean = sys.env.get("IS_LOGICAL_TIMESTAMP_ENABLED").map(_.toBoolean).getOrElse(true)
 
 val baseTime = LocalDateTime.now().truncatedTo(ChronoUnit.MILLIS)
 val zone = java.time.ZoneId.systemDefault()
@@ -65,6 +65,7 @@ val schema = StructType(fields)
 // Generate data
 // ----------------------------------------------------------------------
 println(s"🚀 Starting data generation")
+println(s"Batch ID: $batchId")
 println(s"Columns: $numCols  Partitions: $numPartitions")
 println(s"Logical Timestamp Enabled: $enableLogicalTs")
 
