@@ -56,10 +56,10 @@ setup_spark() {
   log_info "Setting the Spark $SPARK_VERSION with Hadoop $HADOOP_MAJOR_VERSION"
   log_hipen
   if [[ ! -d "$SPARK_HOME" ]]; then
-    log_info "Downloading Spark $SPARK_VERSION"
     SPARK_TAR_FILE="spark-${SPARK_VERSION}-bin-hadoop${HADOOP_MAJOR_VERSION}.tgz"
     SPARK_URL="https://archive.apache.org/dist/spark/spark-${SPARK_VERSION}/${SPARK_TAR_FILE}"
     if [[ ! -f "$HOME/${SPARK_TAR_FILE}" ]]; then
+      log_info "Downloading Spark $SPARK_VERSION"
       wget --quiet -O "$HOME/${SPARK_TAR_FILE}" "$SPARK_URL"
     fi
     tar -xzf "$HOME/${SPARK_TAR_FILE}" -C "$HOME"

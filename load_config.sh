@@ -98,19 +98,21 @@ load_config() {
     export HADOOP_CONF_DIR=/etc/hadoop/conf
   fi
 
-  if [ -z "${AWS_S3_JARS:-}" ]; then
-    aws_java_sdk_bundle_jar="aws-java-sdk-bundle-$AWS_JAVA_SDK_BUNDLE_VERSION.jar"
-    hadoop_aws_jar="hadoop-aws-$HADOOP_VERSION.jar"
-    if [ ! -f "${SPARK_HOME}/jars/$aws_java_sdk_bundle_jar" ]; then
-      log_error "❌ AWS Java SDK Bundle Jar not found: ${SPARK_HOME}/jars/$aws_java_sdk_bundle_jar"
-      exit 1
+  if [[ "${SKIP_SPARK_HOME_CHECK:-0}" != "1" ]]; then
+    if [ -z "${AWS_S3_JARS:-}" ]; then
+      aws_java_sdk_bundle_jar="aws-java-sdk-bundle-$AWS_JAVA_SDK_BUNDLE_VERSION.jar"
+      hadoop_aws_jar="hadoop-aws-$HADOOP_VERSION.jar"
+      if [ ! -f "${SPARK_HOME}/jars/$aws_java_sdk_bundle_jar" ]; then
+        log_error "❌ AWS Java SDK Bundle Jar not found: ${SPARK_HOME}/jars/$aws_java_sdk_bundle_jar"
+        exit 1
+      fi
+      if [ ! -f "${SPARK_HOME}/jars/$hadoop_aws_jar" ]; then
+        log_error "❌ Hadoop AWS Jar not found: ${SPARK_HOME}/jars/$hadoop_aws_jar"
+        exit 1
+      fi
+      export AWS_S3_JARS="${SPARK_HOME}/jars/$aws_java_sdk_bundle_jar,${SPARK_HOME}/jars/$hadoop_aws_jar"
     fi
-    if [ ! -f "${SPARK_HOME}/jars/$hadoop_aws_jar" ]; then
-      log_error "❌ Hadoop AWS Jar not found: ${SPARK_HOME}/jars/$hadoop_aws_jar"
-      exit 1
-    fi
-    export AWS_S3_JARS="${SPARK_HOME}/jars/$aws_java_sdk_bundle_jar,${SPARK_HOME}/jars/$hadoop_aws_jar"
-  fi
+  fi 
   return 0
 }
 

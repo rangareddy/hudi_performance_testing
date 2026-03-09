@@ -16,6 +16,7 @@ val numCols = sys.props.get("NUM_OF_COLUMNS").map(_.toInt).getOrElse(500)
 val numPartitions = sys.props.get("NUM_OF_PARTITIONS").map(_.toInt).getOrElse(10000) 
 val DEFAULT_TARGET="s3://performance-benchmark-datasets-us-west-2/hudi-bench/performance/logical_ts_perf/data/wide_500cols_10000parts"
 val outputPath = sys.env.getOrElse("TARGET_DATA", DEFAULT_TARGET)
+val enableLogicalTs: Boolean = sys.props.get("ENABLE_LOGICAL_TIMESTAMP").map(_.toBoolean).getOrElse(true)
 
 val baseTime = LocalDateTime.now().truncatedTo(ChronoUnit.MILLIS)
 val zone = java.time.ZoneId.systemDefault()
@@ -24,19 +25,38 @@ def toTimestamp(local: LocalDateTime): Timestamp = Timestamp.valueOf(local)
 def toMillis(local: LocalDateTime): Long = local.atZone(zone).toInstant.toEpochMilli
 
 // ----------------------------------------------------------------------
+// Supported datatypes rotation
+// ----------------------------------------------------------------------
+val primitiveTypes = Seq(
+  StringType,
+  IntegerType,
+  LongType,
+  DoubleType,
+  BooleanType
+)
+
+// ----------------------------------------------------------------------
 // Define schema dynamically
 // ----------------------------------------------------------------------
 val fields = (1 to numCols).map { i =>
-  if (i % 50 == 0) {
-    // Logical timestamp columns
+
+  if (enableLogicalTs && i % 50 == 0) {
     if ((i / 50) % 2 == 0)
       StructField(s"ts_millis_$i", LongType, true)
     else
       StructField(s"ts_micros_$i", TimestampType, true)
   } else {
-    // Regular string columns
-    StructField(s"col_$i", StringType, true)
+    val dtype = primitiveTypes(i % primitiveTypes.size)
+
+    dtype match {
+      case StringType  => StructField(s"col_$i", StringType, true)
+      case IntegerType => StructField(s"col_$i", IntegerType, true)
+      case LongType    => StructField(s"col_$i", LongType, true)
+      case DoubleType  => StructField(s"col_$i", DoubleType, true)
+      case BooleanType => StructField(s"col_$i", BooleanType, true)
+    }
   }
+
 }.toBuffer
 
 // Add partition column
@@ -47,23 +67,34 @@ val schema = StructType(fields)
 // ----------------------------------------------------------------------
 // Generate data
 // ----------------------------------------------------------------------
-println(s"🚀 Starting data generation with ${numCols} columns and ${numPartitions} partitions...")
+println(s"🚀 Starting data generation")
+println(s"Columns        : $numCols")
+println(s"Partitions     : $numPartitions")
+println(s"Logical TS     : $enableLogicalTs")
 
 val data = spark.sparkContext.parallelize(1 to numPartitions, numPartitions).map { i =>
   val localTs = baseTime.plusSeconds(i)
-
   val values: Seq[Any] = (1 to numCols).map { colIdx =>
-    if (colIdx % 50 == 0) {
-      // alternating between ts_millis and ts_micros
-      if ((colIdx / 50) % 2 == 0)
-        toMillis(localTs.plusNanos(colIdx * 1000L))
-      else
-        toTimestamp(localTs.plusNanos(colIdx * 2000L))
+    if (enableLogicalTs && colIdx % 50 == 0) {
+        if ((colIdx / 50) % 2 == 0)
+          toMillis(localTs.plusNanos(colIdx * 1000L))
+        else
+          toTimestamp(localTs.plusNanos(colIdx * 2000L))
     } else {
-      s"value_${i}_${colIdx}"
+      primitiveTypes(colIdx % primitiveTypes.size) match {
+        case StringType =>
+          s"value_${i}_${colIdx}"
+        case IntegerType =>
+          i + colIdx
+        case LongType =>
+          (i.toLong * 1000) + colIdx
+        case DoubleType =>
+          i.toDouble + colIdx * 0.1
+        case BooleanType =>
+          colIdx % 2 == 0
+      }
     }
   }
-
   Row.fromSeq(values :+ f"partition_${i}%05d")
 }
 

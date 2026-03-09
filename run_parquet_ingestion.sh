@@ -96,11 +96,12 @@ fi
 log_equal
 log_info "Starting ${INGESTION_TYPE_TITLE} ingestion job"
 log_hipen
-log_info "Ingestion Type    : $INGESTION_TYPE_TITLE"
-log_info "Execution Script  : $EXECUTION_SCRIPT"
-log_info "Source Data Path  : $SOURCE_DATA"
-log_info "Target Data Path  : $TARGET_DATA"
-log_info "Batch ID          : $BATCH_ID"
+log_info "Ingestion Type        : $INGESTION_TYPE_TITLE"
+log_info "Execution Script      : $EXECUTION_SCRIPT"
+log_info "Source Data Path      : $SOURCE_DATA"
+log_info "Target Data Path      : $TARGET_DATA"
+log_info "Batch ID              : $BATCH_ID"
+log_info "Is Logical Timestamp  : $ENABLE_LOGICAL_TIMESTAMP"
 log_equal
 
 EXECUTION_STATUS_CODE=0
