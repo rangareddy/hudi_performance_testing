@@ -3,6 +3,7 @@ import org.apache.spark.sql.types._
 import java.time.LocalDateTime
 import java.time.temporal.ChronoUnit
 import java.sql.{Date, Timestamp}
+import java.math.BigDecimal
 
 // Create Spark session
 val spark = SparkSession.builder()
@@ -35,9 +36,9 @@ val firstTenTypes = Seq(
   FloatType,
   DoubleType,
   DecimalType(18,2),
-  BooleanType,
   DateType,
-  TimestampType
+  TimestampType,
+  StringType
 )
 
 // ----------------------------------------------------------------------
@@ -46,7 +47,7 @@ val firstTenTypes = Seq(
 val fields = (1 to numCols).map { i =>
   if (i <= 10) {
     StructField(s"col_$i", firstTenTypes(i - 1), true)
-  } else if (enableLogicalTs && i % 50 == 0) {
+  } else if (i % 50 == 0) {
     if ((i / 50) % 2 == 0)
       StructField(s"ts_millis_$i", LongType, true)
     else
@@ -69,6 +70,8 @@ println(s"Batch ID: $batchId")
 println(s"Columns: $numCols  Partitions: $numPartitions")
 println(s"Logical Timestamp Enabled: $enableLogicalTs")
 
+val defaultTimestamp = Timestamp.valueOf("1970-01-01 00:00:00")
+
 val data = spark.sparkContext.parallelize(1 to numPartitions, numPartitions).map { i =>
   val localTs = baseTime.plusSeconds(i)
   val values = (1 to numCols).map { colIdx =>
@@ -87,19 +90,24 @@ val data = spark.sparkContext.parallelize(1 to numPartitions, numPartitions).map
         case DoubleType =>
           i.toDouble + colIdx * 0.01
         case DecimalType() =>
-          BigDecimal.valueOf(i * colIdx * 0.1)
-        case BooleanType =>
-          colIdx % 2 == 0
+          new BigDecimal(i * colIdx * 0.1)
         case DateType =>
           Date.valueOf(baseTime.toLocalDate.plusDays(i))
         case TimestampType =>
           toTimestamp(localTs)
       }
-    } else if (enableLogicalTs && colIdx % 50 == 0) {
-      if ((colIdx / 50) % 2 == 0)
-        toMillis(localTs.plusNanos(colIdx * 1000))
-      else
-        toTimestamp(localTs.plusNanos(colIdx * 2000))
+    } else if (colIdx % 50 == 0) {
+      if ((colIdx / 50) % 2 == 0) {
+        if (enableLogicalTs)
+          toMillis(localTs.plusNanos(colIdx * 1000))
+        else
+          0L
+      } else {
+        if (enableLogicalTs)
+          toTimestamp(localTs.plusNanos(colIdx * 2000))
+        else
+          defaultTimestamp
+      }
     } else {
       s"value_${i}_${colIdx}"
     }
@@ -115,7 +123,7 @@ val df = spark.createDataFrame(data, schema)
 println(s"✅ Successfully generated DataFrame with ${numCols} columns and ${numPartitions} partitions.")
 
 println(s"📝 Writing data to $outputPath")
-df.repartition(numPartitions, $"partition_col")
+df.repartition($"partition_col")
   .write
   .mode("overwrite")
   .parquet(outputPath)
