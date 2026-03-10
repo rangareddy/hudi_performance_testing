@@ -156,7 +156,6 @@ def main() -> int:
         return 1
 
     run_sequence = read_and_increment_sequence()
-    run_ts = datetime.now(timezone.utc).isoformat()[:19].replace("T", " ")
     batch_id = args.batch_id
     output_path = Path(args.output)
     if not output_path.is_absolute():
@@ -180,6 +179,8 @@ def main() -> int:
         start_time = time.time()
         exec_time, count, status = run_benchmark(args.table_type, hudi_version, batch_id)
         end_time = time.time()
+        start_time = datetime.fromtimestamp(start_time).strftime("%Y-%m-%d %H:%M:%S")
+        end_time = datetime.fromtimestamp(end_time).strftime("%Y-%m-%d %H:%M:%S")
         row = {
             "run_sequence": run_sequence,
             "table_type": args.table_type,
@@ -187,7 +188,6 @@ def main() -> int:
             "batch_id": batch_id,
             "execution_time_seconds": exec_time if exec_time is not None else "",
             "count": count if count is not None else "",
-            "run_timestamp_utc": run_ts,
             "start_time": start_time,
             "end_time": end_time,
             "status": status,
