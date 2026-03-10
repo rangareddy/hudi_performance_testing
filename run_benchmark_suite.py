@@ -58,27 +58,6 @@ def read_and_increment_sequence() -> int:
     return n
 
 
-def build_output_suffix(table_type: str, hudi_versions: List[str]) -> str:
-    """Build a suffix from table type and major/minor Hudi versions."""
-    table_suffix = table_type.strip().lower()
-    hudi_version = hudi_versions[0]
-    cleaned = hudi_version.strip().split("-", 1)[0]
-    parts = cleaned.split(".")
-    if len(parts) >= 2:
-        major_minor = f"{parts[0]}_{parts[1]}"
-    else:
-        major_minor = cleaned.replace(".", "_")
-    version_suffixes = [major_minor]
-    return "_".join([table_suffix] + [major_minor])
-
-
-def append_suffix_to_output_path(output_path: Path, suffix: str) -> Path:
-    """Append suffix before the file extension."""
-    if output_path.suffix:
-        return output_path.with_name(f"{output_path.stem}_{suffix}{output_path.suffix}")
-    return output_path.with_name(f"{output_path.name}_{suffix}")
-
-
 def run_benchmark(table_type: str, hudi_version: str, batch_id: int) -> Tuple[Optional[float], Optional[int], str]:
     """
     Run run_hudi_benchmark.sh and parse output.
@@ -182,8 +161,6 @@ def main() -> int:
     output_path = Path(args.output)
     if not output_path.is_absolute():
         output_path = SCRIPT_DIR / output_path
-    output_suffix = build_output_suffix(args.table_type, hudi_versions)
-    output_path = append_suffix_to_output_path(output_path, output_suffix)
     output_path.parent.mkdir(parents=True, exist_ok=True)
     file_existed = output_path.exists()
 

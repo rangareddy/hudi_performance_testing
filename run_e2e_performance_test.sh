@@ -83,7 +83,29 @@ E2E_STATE_FILE="${E2E_STATE_DIR}/state_${TABLE_TYPE_LOWER}_v${TARGET_VERSION}.tx
 S3_STATE_FILE="${BASE_PATH}/e2e_state/state_${TABLE_TYPE_LOWER}_v${TARGET_VERSION}.txt"
 S3_CSV_FILE="${BASE_PATH}/hudi_benchmark_results.csv"
 S3_LOGS_DIR="${BASE_PATH}/logs"
-mkdir -p "$E2E_STATE_DIR"
+REPORTS_DIR="${SCRIPT_DIR}/reports"
+
+mkdir -p "$E2E_STATE_DIR" "$REPORTS_DIR"
+
+# Benchmark CSV path: reports/hudi_benchmark_results_<cow|mor>_<0_14|0_15|...>.csv
+if [[ "$TABLE_TYPE" == "COPY_ON_WRITE" ]]; then
+  BENCHMARK_TABLE_SUFFIX="cow"
+else
+  BENCHMARK_TABLE_SUFFIX="mor"
+fi
+
+BENCHMARK_VERSION_SUFFIX=""
+for v in $(echo "$HUDI_VERSIONS" | tr ',' ' '); do
+  v_clean="${v%%-*}"
+  major_minor=$(echo "$v_clean" | cut -d. -f1,2 | tr '.' '_')
+  case " ${BENCHMARK_VERSION_SUFFIX} " in
+    *" ${major_minor} "*) ;;
+    *) BENCHMARK_VERSION_SUFFIX="${BENCHMARK_VERSION_SUFFIX} ${major_minor}" ;;
+  esac
+done
+BENCHMARK_VERSION_SUFFIX=$(echo $BENCHMARK_VERSION_SUFFIX | tr ' ' '_')
+[[ -z "$BENCHMARK_VERSION_SUFFIX" ]] && BENCHMARK_VERSION_SUFFIX="0_14"
+BENCHMARK_CSV_PATH="${REPORTS_DIR}/hudi_benchmark_results_${BENCHMARK_TABLE_SUFFIX}_${BENCHMARK_VERSION_SUFFIX}.csv"
 
 # Log file: all output from here goes to log and console
 LOG_DIR="${SCRIPT_DIR}/logs"
@@ -146,10 +168,10 @@ upload_benchmark_csv_to_s3() {
     return 0
   fi
   local f
-  for f in "${SCRIPT_DIR}"/hudi_benchmark_results*.csv; do
+  for f in "${REPORTS_DIR}"/hudi_benchmark_results*.csv; do
     if [[ -f "$f" ]]; then
-      log_echo "Uploading $(basename "$f") to S3: ${BASE_PATH}/$(basename "$f")"
-      aws s3 cp "$f" "${BASE_PATH}/$(basename "$f")" --only-show-errors 2>&1 | tee -a "$LOG_FILE" || true
+      log_echo "Uploading $(basename "$f") to S3: ${BASE_PATH}/reports/$(basename "$f")"
+      aws s3 cp "$f" "${BASE_PATH}/reports/$(basename "$f")" --only-show-errors 2>&1 | tee -a "$LOG_FILE" || true
     fi
   done
 }
@@ -233,7 +255,8 @@ for ((BATCH_ID=0; BATCH_ID<TOTAL_BATCHES; BATCH_ID++)); do
     python3 "${SCRIPT_DIR}/run_benchmark_suite.py" \
       --table-type "$TABLE_TYPE" \
       --hudi-versions "$HUDI_VERSIONS" \
-      --batch-id $BATCH_ID
+      --batch-id $BATCH_ID \
+      --output "$BENCHMARK_CSV_PATH"
 
     upload_benchmark_csv_to_s3
 
@@ -255,6 +278,6 @@ fi
 
 log_equal
 log_echo "E2E performance test completed"
-log_info "Report  : ${SCRIPT_DIR}/hudi_benchmark_results.csv"
+log_info "Report  : $BENCHMARK_CSV_PATH"
 log_info "Log file: $LOG_FILE"
 log_equal
