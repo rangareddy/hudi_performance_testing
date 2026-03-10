@@ -11,7 +11,7 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 export SKIP_SPARK_HOME_CHECK=1
 
 # shellcheck source=load_config.sh
-source "${SCRIPT_DIR}/load_config.sh"
+source "${SCRIPT_DIR}/scripts/load_config.sh"
 export SPARK_MAJOR_VERSION=$(echo "${SPARK_VERSION}" | cut -d '.' -f 1,2)
 export HADOOP_MAJOR_VERSION=$(echo "${HADOOP_VERSION}" | cut -d '.' -f 1)
 

@@ -15,7 +15,7 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 
 # shellcheck source=load_config.sh
-source "${SCRIPT_DIR}/load_config.sh"
+source "${SCRIPT_DIR}/scripts/load_config.sh"
 
 usage() {
   log_info ""

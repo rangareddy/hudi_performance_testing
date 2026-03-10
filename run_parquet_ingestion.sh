@@ -9,7 +9,7 @@ SCRIPT_NAME="$0"
 SCRIPT_DIR="$(cd "$(dirname "${SCRIPT_NAME}")" && pwd)"
 
 # shellcheck source=load_config.sh
-source "${SCRIPT_DIR}/load_config.sh"
+source "${SCRIPT_DIR}/scripts/load_config.sh"
 
 usage() {
   log_info ""

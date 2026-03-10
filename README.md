@@ -43,7 +43,7 @@ aws s3 cp s3://performance-benchmark-datasets-us-west-2/hudi-bench/performance/l
 unzip hudi_performace_testing.zip && cd hudi_performace_testing
 ```
 
-Before running `setup_node.sh`, update the `common.properties` file according to your requirements. For example, update the `SOURCE_HUDI_VERSION` and `TARGET_HUDI_VERSION`.
+Before running `setup_node.sh`, update the `scripts/common.properties` file according to your requirements. For example, update the `SOURCE_HUDI_VERSION` and `TARGET_HUDI_VERSION`.
 
 ```sh
 bash setup_node.sh
