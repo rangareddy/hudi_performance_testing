@@ -141,6 +141,19 @@ set_step_status() {
   fi
 }
 
+upload_benchmark_csv_to_s3() {
+  if [[ "$DRY_RUN" == true ]]; then
+    return 0
+  fi
+  local f
+  for f in "${SCRIPT_DIR}"/hudi_benchmark_results*.csv; do
+    if [[ -f "$f" ]]; then
+      log_echo "Uploading $(basename "$f") to S3: ${BASE_PATH}/$(basename "$f")"
+      aws s3 cp "$f" "${BASE_PATH}/$(basename "$f")" --only-show-errors 2>&1 | tee -a "$LOG_FILE" || true
+    fi
+  done
+}
+
 run_step() {
   local step_id="$1"
   local step_name="$2"
@@ -222,17 +235,16 @@ for ((BATCH_ID=0; BATCH_ID<TOTAL_BATCHES; BATCH_ID++)); do
       --hudi-versions "$HUDI_VERSIONS" \
       --batch-id $BATCH_ID
 
+    upload_benchmark_csv_to_s3
+
     log_hipen
     log_info "Batch $BATCH_ID processing completed"
     log_hipen
 done
 
-# Upload results and log to S3 at end (state file already uploaded after each step)
+# Upload results and log to S3 (state and CSV already uploaded after each step / each benchmark)
 if [[ "$DRY_RUN" != true ]]; then
-  if [[ -f "${SCRIPT_DIR}/hudi_benchmark_results.csv" ]]; then
-    log_echo "Uploading hudi_benchmark_results.csv to S3: $S3_CSV_FILE"
-    aws s3 cp "${SCRIPT_DIR}/hudi_benchmark_results.csv" "$S3_CSV_FILE" --only-show-errors 2>&1 | tee -a "$LOG_FILE" || true
-  fi
+  upload_benchmark_csv_to_s3
   if [[ -f "$LOG_FILE" ]]; then
     S3_LOG_FILE="${S3_LOGS_DIR}/$(basename "$LOG_FILE")"
     log_echo "Uploading log to S3: $S3_LOG_FILE"
