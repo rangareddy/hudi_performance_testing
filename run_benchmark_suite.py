@@ -4,13 +4,14 @@ Run Hudi read benchmarks for multiple table types and Hudi versions, then write 
 Each run increments a persistent sequence number (how many times this script has been run).
 
 Usage:
-  python run_benchmark_suite.py
-  python run_benchmark_suite.py --table-types MERGE_ON_READ --hudi-versions 0.14.1,0.14.2
-  python run_benchmark_suite.py --output results/benchmark_results.csv
+  python run_benchmark_suite.py \
+    --table-types MERGE_ON_READ \
+    --hudi-versions 0.14.1,0.14.2 \
+    --output results/benchmark_results.csv
 
 Output:
-  - CSV with columns: run_sequence, table_type, hudi_version, execution_time_seconds, count, run_timestamp_utc
-  - Sequence file: benchmark_run_sequence.txt (in project_dir)
+  - CSV with columns: run_sequence, table_type, hudi_version, execution_time_seconds, count, start_time, end_time, status
+  - Sequence file: benchmark_run_sequence.txt
 """
 
 import argparse
@@ -25,7 +26,6 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
 
-# Default combinations (align with common.properties: SOURCE_HUDI_VERSION, TARGET_HUDI_VERSION)
 DEFAULT_TABLE_TYPES = ["COPY_ON_WRITE", "MERGE_ON_READ"]
 DEFAULT_HUDI_VERSIONS = ["0.14.1", "0.14.2"]
 SEQUENCE_FILENAME = "benchmark_run_sequence.txt"
@@ -138,23 +138,15 @@ def main() -> int:
         default=str(SCRIPT_DIR / DEFAULT_CSV),
         help="Output CSV path (created or appended).",
     )
-    parser.add_argument(
-        "--dry-run",
-        action="store_true",
-        help="Only print what would be run and exit.",
-    )
 
     args = parser.parse_args()
     if not args.hudi_versions:
         print("❌ Error: --hudi-versions is required", file=sys.stderr)
         return 1
-
-    hudi_versions = [v.strip() for v in args.hudi_versions.split(",") if v.strip()]
-
-    if not args.table_type or not hudi_versions:
-        print("Need at least one table type and one hudi version.", file=sys.stderr)
+    if not args.table_type:
+        print("❌ Error: --table-type is required", file=sys.stderr)
         return 1
-
+    hudi_versions = [v.strip() for v in args.hudi_versions.split(",") if v.strip()]
     run_sequence = read_and_increment_sequence()
     batch_id = args.batch_id
     output_path = Path(args.output)
@@ -162,16 +154,6 @@ def main() -> int:
         output_path = SCRIPT_DIR / output_path
     output_path.parent.mkdir(parents=True, exist_ok=True)
     file_existed = output_path.exists()
-
-    if args.dry_run:
-        print(f"Run sequence: {run_sequence}")
-        print(f"Table type: {args.table_type}")
-        print(f"Hudi versions: {hudi_versions}")
-        print(f"Output CSV: {output_path}")
-        print(f"Batch ID: {batch_id}")
-        for hv in hudi_versions:
-            print(f"  Would run: run_hudi_benchmark.sh --table-type {args.table_type} --target-hudi-version {hv}")
-        return 0
 
     rows = []  # type: List[Dict[str, Any]]
     for hudi_version in hudi_versions:
