@@ -41,6 +41,11 @@ Run once on the cluster node:
 ```sh
 aws s3 cp s3://performance-benchmark-datasets-us-west-2/hudi-bench/performance/logical_ts_perf/source_code/ . --recursive
 unzip hudi_performace_testing.zip && cd hudi_performace_testing
+```
+
+Before running `setup_node.sh`, update the `common.properties` file according to your requirements. For example, update the `SOURCE_HUDI_VERSION` and `TARGET_HUDI_VERSION`.
+
+```sh
 bash setup_node.sh
 ```
 
@@ -109,6 +114,12 @@ Run the end-to-end flow:
 ```sh
 bash run_e2e_performance_test.sh --table-type COPY_ON_WRITE
 bash run_e2e_performance_test.sh --table-type MERGE_ON_READ
+```
+
+(or)
+
+```sh
+bash run_e2e_performance_test_all.sh
 ```
 
 The current E2E flow runs **4 batches** and **12 steps** total:

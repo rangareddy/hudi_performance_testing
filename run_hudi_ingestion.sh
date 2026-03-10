@@ -148,7 +148,6 @@ log_info "spark-submit command: $SPARK_HOME/bin/spark-submit \
   --deploy-mode client \
   --jars "$HUDI_JARS" \
   --properties-file "${SPARK_DEFAULTS_CONF}" \
-  --conf spark.dynamicAllocation.enabled=true \
   --conf spark.sql.adaptive.enabled=true \
   --conf spark.hadoop.mapreduce.fileoutputcommitter.algorithm.version=2 \
   --conf spark.hadoop.fs.s3a.committer.name=directory \
@@ -180,7 +179,6 @@ time "${SPARK_HOME}/bin/spark-submit" \
   --deploy-mode client \
   --jars "$HUDI_JARS" \
   --properties-file "${SPARK_DEFAULTS_CONF}" \
-  --conf spark.dynamicAllocation.enabled=true \
   --conf spark.sql.adaptive.enabled=true \
   --conf spark.hadoop.mapreduce.fileoutputcommitter.algorithm.version=2 \
   --conf spark.hadoop.fs.s3a.committer.name=directory \
