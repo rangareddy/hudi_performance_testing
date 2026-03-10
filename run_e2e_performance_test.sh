@@ -93,6 +93,10 @@ else
   BENCHMARK_TABLE_SUFFIX="mor"
 fi
 
+if [ "$IS_LOGICAL_TIMESTAMP_ENABLED" == true ]; then
+  BENCHMARK_TABLE_SUFFIX="${BENCHMARK_TABLE_SUFFIX}_lts"
+fi
+
 BENCHMARK_VERSION_SUFFIX=""
 for v in $(echo "$HUDI_VERSIONS" | tr ',' ' '); do
   v_clean="${v%%-*}"
