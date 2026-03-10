@@ -75,9 +75,14 @@ load_config() {
   # Derived paths (only if not already set)
   [[ -z "${JARS_PATH:-}" && -n "${BASE_PATH:-}" ]] && export JARS_PATH="${BASE_PATH}/jars"
   [[ -z "${DATA_PATH:-}" && -n "${BASE_PATH:-}" ]] && export DATA_PATH="${BASE_PATH}/data"
-  [[ -z "${TABLE_BASE_PATH:-}" && -n "${DATA_PATH:-}" && -n "${TABLE_NAME:-}" ]] && export TABLE_BASE_PATH="${DATA_PATH}/hudi_logical"
-  [[ -z "${SOURCE_DATA:-}" && -n "${DATA_PATH:-}" ]] && export SOURCE_DATA="${DATA_PATH}/wide_500cols_10000parts"
-  [[ -z "${BASE_DATA_PATH:-}" && -n "${DATA_PATH:-}" ]] && export BASE_DATA_PATH="${DATA_PATH}"
+
+  if [[ -z "${SOURCE_DATA:-}" ]]; then
+    if [ "$IS_LOGICAL_TIMESTAMP_ENABLED" == true ]; then 
+      export SOURCE_DATA="${DATA_PATH}/wide_${NUM_OF_COLUMNS}cols_${NUM_OF_PARTITIONS}parts_lts"
+    else
+      export SOURCE_DATA="${DATA_PATH}/wide_${NUM_OF_COLUMNS}cols_${NUM_OF_PARTITIONS}parts"
+    fi
+  fi
 
   # Delta Streamer --props must be file:// URL when using local path
   if [[ -n "${PROPS_FILE:-}" && "$PROPS_FILE" != file://* && "$PROPS_FILE" != s3:* ]]; then
