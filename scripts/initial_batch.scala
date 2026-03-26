@@ -47,7 +47,7 @@ val firstTenTypes = Seq(
 val fields = (1 to numCols).map { i =>
   if (i <= 10) {
     StructField(s"col_$i", firstTenTypes(i - 1), true)
-  } else if (i % 50 == 0) {
+  } else if (enableLogicalTs && i % 50 == 0) {
     if ((i / 50) % 2 == 0)
       StructField(s"ts_millis_$i", LongType, true)
     else
@@ -69,8 +69,6 @@ println(s"🚀 Starting data generation")
 println(s"Batch ID: $batchId")
 println(s"Columns: $numCols  Partitions: $numPartitions")
 println(s"Logical Timestamp Enabled: $enableLogicalTs")
-
-val defaultTimestamp = Timestamp.valueOf("1970-01-01 00:00:00")
 
 val data = spark.sparkContext.parallelize(1 to numPartitions, numPartitions).map { i =>
   val localTs = baseTime.plusSeconds(i)
@@ -96,18 +94,11 @@ val data = spark.sparkContext.parallelize(1 to numPartitions, numPartitions).map
         case TimestampType =>
           toTimestamp(localTs)
       }
-    } else if (colIdx % 50 == 0) {
-      if ((colIdx / 50) % 2 == 0) {
-        if (enableLogicalTs)
-          toMillis(localTs.plusNanos(colIdx * 1000))
-        else
-          0L
-      } else {
-        if (enableLogicalTs)
-          toTimestamp(localTs.plusNanos(colIdx * 2000))
-        else
-          defaultTimestamp
-      }
+    } else if (enableLogicalTs && colIdx % 50 == 0) {
+      if ((colIdx / 50) % 2 == 0)
+        toMillis(localTs.plusNanos(colIdx * 1000))
+      else
+        toTimestamp(localTs.plusNanos(colIdx * 2000))
     } else {
       s"value_${i}_${colIdx}"
     }
