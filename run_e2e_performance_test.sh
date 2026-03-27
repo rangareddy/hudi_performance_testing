@@ -241,7 +241,7 @@ TOTAL_STEPS=$((TOTAL_BATCHES * 3))
 
 for ((BATCH_ID=0; BATCH_ID<TOTAL_BATCHES; BATCH_ID++)); do
     start_time=$(date +%s)
-    log_hipen
+    log_info "$(log_hipen)"
     log_echo "Processing batch $BATCH_ID..."
 
     job_type="incremental"
@@ -287,7 +287,7 @@ for ((BATCH_ID=0; BATCH_ID<TOTAL_BATCHES; BATCH_ID++)); do
     fi
     
     log_info "Batch $BATCH_ID processing completed in $duration_formatted ..."
-    log_hipen
+    log_info "$(log_hipen)"
 done
 
 # Upload results and log to S3 (state and CSV already uploaded after each step / each benchmark)
