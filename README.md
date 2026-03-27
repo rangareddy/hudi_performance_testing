@@ -137,11 +137,13 @@ Options:
 
 State and artifacts:
 
-- Local state file: `.e2e_state/state_<table>_v<ver>.txt`
-- S3 state file: `${BASE_PATH}/e2e_state/state_<table>_v<ver>.txt`
-- Local log file: `logs/e2e_<table>_v<ver>_<timestamp>.log`
-- S3 log upload: `${BASE_PATH}/logs/<log file>`
-- Benchmark CSV upload: `${BASE_PATH}/hudi_benchmark_results.csv`
+- Local state file: `.e2e_state/state_<table>_<IS_LOGICAL_TIMESTAMP_ENABLED>_v<ver>.txt`
+- S3 state file: `${BASE_PATH}/e2e_state/state_<table>_<IS_LOGICAL_TIMESTAMP_ENABLED>_v<ver>.txt`
+- Local log file: `logs/<YYYYMMDD_HHMMSS>/e2e_<table>_v<ver>_<IS_LOGICAL_TIMESTAMP_ENABLED>.log`
+- S3 log upload: `${BASE_PATH}/logs/<YYYYMMDD_HHMMSS>/<log file>`
+- Read benchmark CSV (local): `reports/hudi_benchmark_results_<cow|mor>_<IS_LOGICAL_TIMESTAMP_ENABLED>_<hudi_major_minor...>.csv`
+- Write performance CSV (local): `reports/hudi_write_performance_<cow|mor>_<IS_LOGICAL_TIMESTAMP_ENABLED>_<hudi_major_minor...>.csv` (appended by parquet + Hudi ingestion when `WRITE_PERF_CSV` is set by E2E)
+- S3 uploads: `${BASE_PATH}/reports/<same filenames>` after each benchmark batch and at end; write-perf CSV uses the same pattern
 
 The E2E script uploads state to S3 after each step, so reruns skip successful steps and retry failed ones.
 

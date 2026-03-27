@@ -119,7 +119,20 @@ export NUM_OF_PARTITIONS=${NUM_OF_PARTITIONS:-10000}
 log_info "Executing $INGESTION_TYPE_TITLE ingestion"
 log_info "Dataset configuration: columns=${NUM_OF_COLUMNS}, partitions=${NUM_OF_PARTITIONS}"
 
+append_parquet_write_perf() {
+  local duration_sec="$1"
+  local status="$2"
+  [[ -z "${WRITE_PERF_CSV:-}" ]] && return 0
+  mkdir -p "$(dirname "$WRITE_PERF_CSV")"
+  local header="run_timestamp_utc,table_type,operation,batch_id,hudi_version,execution_time_seconds,status,is_logical_timestamp_enabled"
+  if [[ ! -f "$WRITE_PERF_CSV" ]]; then
+    echo "$header" > "$WRITE_PERF_CSV"
+  fi
+  echo "$(date -u +"%Y-%m-%d %H:%M:%S"),${TABLE_TYPE:-},parquet_${INGESTION_TYPE},${BATCH_ID},,${duration_sec},${status},${IS_LOGICAL_TIMESTAMP_ENABLED:-true}" >> "$WRITE_PERF_CSV"
+}
+
 if [[ "$INGESTION_TYPE" == "initial" ]]; then
+  _wp_start=$(date +%s)
   if "${SPARK_HOME}/bin/spark-shell" \
     --master yarn \
     --deploy-mode client \
@@ -131,13 +144,21 @@ if [[ "$INGESTION_TYPE" == "initial" ]]; then
     -i "$EXECUTION_SCRIPT"
   then
     EXECUTION_STATUS_CODE=0
+    _wp_end=$(date +%s)
+    _wp_dur=$((_wp_end - _wp_start))
+    log_info "Write Execution Complete. parquet_initial batch ${BATCH_ID}. Total execution time: ${_wp_dur} seconds"
+    append_parquet_write_perf "$_wp_dur" "ok"
   else
     EXECUTION_STATUS_CODE=$?
+    _wp_end=$(date +%s)
+    _wp_dur=$((_wp_end - _wp_start))
+    append_parquet_write_perf "$_wp_dur" "failure"
   fi
 else
   export NUM_OF_RECORDS_TO_UPDATE=${NUM_OF_RECORDS_TO_UPDATE:-100}
   export SOURCE_DATA="${SOURCE_DATA}/batch_0"
   log_info "Records to update per batch: ${NUM_OF_RECORDS_TO_UPDATE}"
+  _wp_start=$(date +%s)
   if "${SPARK_HOME}/bin/spark-submit" \
     --master yarn \
     --deploy-mode client \
@@ -149,8 +170,15 @@ else
     "$EXECUTION_SCRIPT"
   then
     EXECUTION_STATUS_CODE=0
+    _wp_end=$(date +%s)
+    _wp_dur=$((_wp_end - _wp_start))
+    log_info "Write Execution Complete. parquet_incremental batch ${BATCH_ID}. Total execution time: ${_wp_dur} seconds"
+    append_parquet_write_perf "$_wp_dur" "ok"
   else
     EXECUTION_STATUS_CODE=$?
+    _wp_end=$(date +%s)
+    _wp_dur=$((_wp_end - _wp_start))
+    append_parquet_write_perf "$_wp_dur" "failure"
   fi
 fi
 

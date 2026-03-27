@@ -174,7 +174,21 @@ log_info "spark-submit command: $SPARK_HOME/bin/spark-submit \
   --hoodie-conf hoodie.datasource.write.partitionpath.field=partition_col"  
 log_hipen
 
-time "${SPARK_HOME}/bin/spark-submit" \
+append_hudi_write_perf() {
+  local duration_sec="$1"
+  local status="$2"
+  [[ -z "${WRITE_PERF_CSV:-}" ]] && return 0
+  mkdir -p "$(dirname "$WRITE_PERF_CSV")"
+  local header="run_timestamp_utc,table_type,operation,batch_id,hudi_version,execution_time_seconds,status,is_logical_timestamp_enabled"
+  if [[ ! -f "$WRITE_PERF_CSV" ]]; then
+    echo "$header" > "$WRITE_PERF_CSV"
+  fi
+  local bid="${BATCH_ID_ARG:-}"
+  echo "$(date -u +"%Y-%m-%d %H:%M:%S"),${TABLE_TYPE},hudi_delta_streamer,${bid},${TARGET_HUDI_VERSION},${duration_sec},${status},${IS_LOGICAL_TIMESTAMP_ENABLED:-true}" >> "$WRITE_PERF_CSV"
+}
+
+_wp_start=$(date +%s)
+if "${SPARK_HOME}/bin/spark-submit" \
   --master yarn \
   --deploy-mode client \
   --jars "$HUDI_JARS" \
@@ -203,10 +217,16 @@ time "${SPARK_HOME}/bin/spark-submit" \
   --hoodie-conf hoodie.datasource.write.recordkey.field=col_1 \
   --hoodie-conf hoodie.datasource.write.precombine.field=col_1 \
   --hoodie-conf hoodie.datasource.write.partitionpath.field=partition_col
-
-if [ $? -eq 0 ]; then
+then
+  _wp_end=$(date +%s)
+  _wp_dur=$((_wp_end - _wp_start))
+  log_info "Write Execution Complete. hudi_delta_streamer table ${TABLE_TYPE} version ${TARGET_HUDI_VERSION}. Total execution time: ${_wp_dur} seconds"
+  append_hudi_write_perf "$_wp_dur" "ok"
   log_success "✅ Hudi Ingestion job completed successfully"
 else
+  _wp_end=$(date +%s)
+  _wp_dur=$((_wp_end - _wp_start))
+  append_hudi_write_perf "$_wp_dur" "failure"
   log_error "❌ Hudi Ingestion job failed"
   log_hipen
   exit 1

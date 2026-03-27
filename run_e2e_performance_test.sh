@@ -93,10 +93,6 @@ else
   BENCHMARK_TABLE_SUFFIX="mor"
 fi
 
-if [ "$IS_LOGICAL_TIMESTAMP_ENABLED" == true ]; then
-  BENCHMARK_TABLE_SUFFIX="${BENCHMARK_TABLE_SUFFIX}_lts"
-fi
-
 BENCHMARK_VERSION_SUFFIX=""
 for v in $(echo "$HUDI_VERSIONS" | tr ',' ' '); do
   v_clean="${v%%-*}"
@@ -108,19 +104,24 @@ for v in $(echo "$HUDI_VERSIONS" | tr ',' ' '); do
 done
 BENCHMARK_VERSION_SUFFIX=$(echo $BENCHMARK_VERSION_SUFFIX | tr ' ' '_')
 [[ -z "$BENCHMARK_VERSION_SUFFIX" ]] && BENCHMARK_VERSION_SUFFIX="0_14"
-BENCHMARK_CSV_PATH="${REPORTS_DIR}/hudi_benchmark_results_${BENCHMARK_TABLE_SUFFIX}_${BENCHMARK_VERSION_SUFFIX}.csv"
+# Report filenames include table (cow|mor), IS_LOGICAL_TIMESTAMP_ENABLED, and Hudi version suffix
+BENCHMARK_CSV_PATH="${REPORTS_DIR}/hudi_benchmark_results_${BENCHMARK_TABLE_SUFFIX}_${IS_LOGICAL_TIMESTAMP_ENABLED}_${BENCHMARK_VERSION_SUFFIX}.csv"
+WRITE_PERF_CSV="${REPORTS_DIR}/hudi_write_performance_${BENCHMARK_TABLE_SUFFIX}_${IS_LOGICAL_TIMESTAMP_ENABLED}_${BENCHMARK_VERSION_SUFFIX}.csv"
+export WRITE_PERF_CSV TABLE_TYPE IS_LOGICAL_TIMESTAMP_ENABLED
 
-# Log file: all output from here goes to log and console
+# Log file: logs/<YYYYMMDD_HHMMSS>/e2e_<table>_v<ver>_<lts>.log
 LOG_DIR="${SCRIPT_DIR}/logs"
-mkdir -p "$LOG_DIR"
-LOG_FILE="${LOG_DIR}/e2e_${TABLE_TYPE_LOWER}_v${TARGET_VERSION}_$(date +%Y%m%d_%H%M%S).log"
+LOG_RUN_ID="$(date +%Y%m%d_%H%M%S)"
+LOG_SUBDIR="${LOG_DIR}/${LOG_RUN_ID}"
+mkdir -p "$LOG_SUBDIR"
+LOG_FILE="${LOG_SUBDIR}/e2e_${TABLE_TYPE_LOWER}_v${TARGET_VERSION}_${IS_LOGICAL_TIMESTAMP_ENABLED}.log"
 
 # Create log file and write all output to it (and console) via helper
 : > "$LOG_FILE"
 log_echo() { printf '%s\n' "$*" | tee -a "$LOG_FILE"; }
 log_run() { "$@" 2>&1 | tee -a "$LOG_FILE"; return "${PIPESTATUS[0]}"; }
 
-log_echo "Log file: $LOG_FILE"
+echo "Log file: $LOG_FILE"
 
 # If state file exists on S3, download to local so we resume from last run
 if aws s3 ls "$S3_STATE_FILE" &>/dev/null; then
@@ -174,6 +175,19 @@ upload_benchmark_csv_to_s3() {
   for f in "${REPORTS_DIR}"/hudi_benchmark_results*.csv; do
     if [[ -f "$f" ]]; then
       log_echo "Uploading $(basename "$f") to S3: ${BASE_PATH}/reports/$(basename "$f")"
+      aws s3 cp "$f" "${BASE_PATH}/reports/$(basename "$f")" --only-show-errors 2>&1 | tee -a "$LOG_FILE" || true
+    fi
+  done
+}
+
+upload_write_perf_csv_to_s3() {
+  if [[ "$DRY_RUN" == true ]]; then
+    return 0
+  fi
+  local f
+  for f in "${REPORTS_DIR}"/hudi_write_performance*.csv; do
+    if [[ -f "$f" ]]; then
+      log_echo "Uploading write performance $(basename "$f") to S3: ${BASE_PATH}/reports/$(basename "$f")"
       aws s3 cp "$f" "${BASE_PATH}/reports/$(basename "$f")" --only-show-errors 2>&1 | tee -a "$LOG_FILE" || true
     fi
   done
@@ -262,6 +276,7 @@ for ((BATCH_ID=0; BATCH_ID<TOTAL_BATCHES; BATCH_ID++)); do
       --output "$BENCHMARK_CSV_PATH"
 
     upload_benchmark_csv_to_s3
+    upload_write_perf_csv_to_s3
 
     log_hipen
     log_info "Batch $BATCH_ID processing completed"
@@ -271,8 +286,9 @@ done
 # Upload results and log to S3 (state and CSV already uploaded after each step / each benchmark)
 if [[ "$DRY_RUN" != true ]]; then
   upload_benchmark_csv_to_s3
+  upload_write_perf_csv_to_s3
   if [[ -f "$LOG_FILE" ]]; then
-    S3_LOG_FILE="${S3_LOGS_DIR}/$(basename "$LOG_FILE")"
+    S3_LOG_FILE="${S3_LOGS_DIR}/${LOG_RUN_ID}/$(basename "$LOG_FILE")"
     log_echo "Uploading log to S3: $S3_LOG_FILE"
     aws s3 cp "$LOG_FILE" "$S3_LOG_FILE" --only-show-errors 2>&1 | tee -a "$LOG_FILE" || true
   fi
@@ -281,6 +297,7 @@ fi
 
 log_equal
 log_echo "E2E performance test completed"
-log_info "Report  : $BENCHMARK_CSV_PATH"
-log_info "Log file: $LOG_FILE"
+log_info "Report (read)  : $BENCHMARK_CSV_PATH"
+log_info "Report (write) : $WRITE_PERF_CSV"
+log_info "Log file       : $LOG_FILE"
 log_equal
