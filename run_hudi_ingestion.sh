@@ -222,12 +222,12 @@ then
   _wp_dur=$((_wp_end - _wp_start))
   log_info "Write Execution Complete. hudi_delta_streamer table ${TABLE_TYPE} version ${TARGET_HUDI_VERSION}. Total execution time: ${_wp_dur} seconds"
   append_hudi_write_perf "$_wp_dur" "ok"
-  log_success "✅ Hudi Ingestion job completed successfully"
+  log_success "✅ Hudi Ingestion job completed successfully in ${_wp_dur} seconds"
 else
   _wp_end=$(date +%s)
   _wp_dur=$((_wp_end - _wp_start))
   append_hudi_write_perf "$_wp_dur" "failure"
-  log_error "❌ Hudi Ingestion job failed"
+  log_error "❌ Hudi Ingestion job failed in ${_wp_dur} seconds"
   log_hipen
   exit 1
 fi
