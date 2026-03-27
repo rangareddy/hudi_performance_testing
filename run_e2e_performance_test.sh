@@ -75,7 +75,6 @@ case "$TABLE_TYPE_UPPER" in
     ;;
 esac
 
-# State file per table type (avoid duplicate runs; retry only on failure)
 TARGET_VERSION=$(echo "${TARGET_HUDI_VERSION}" | cut -d '.' -f 1,2 | tr -d '.')
 TABLE_TYPE_LOWER=$(echo "$TABLE_TYPE" | tr '[:upper:]' '[:lower:]')
 E2E_STATE_DIR="${SCRIPT_DIR}/.e2e_state"
@@ -104,14 +103,15 @@ for v in $(echo "$HUDI_VERSIONS" | tr ',' ' '); do
 done
 BENCHMARK_VERSION_SUFFIX=$(echo $BENCHMARK_VERSION_SUFFIX | tr ' ' '_')
 [[ -z "$BENCHMARK_VERSION_SUFFIX" ]] && BENCHMARK_VERSION_SUFFIX="0_14"
+
 # Report filenames include table (cow|mor), IS_LOGICAL_TIMESTAMP_ENABLED, and Hudi version suffix
 BENCHMARK_CSV_PATH="${REPORTS_DIR}/hudi_benchmark_results_${BENCHMARK_TABLE_SUFFIX}_${IS_LOGICAL_TIMESTAMP_ENABLED}_${BENCHMARK_VERSION_SUFFIX}.csv"
 WRITE_PERF_CSV="${REPORTS_DIR}/hudi_write_performance_${BENCHMARK_TABLE_SUFFIX}_${IS_LOGICAL_TIMESTAMP_ENABLED}_${BENCHMARK_VERSION_SUFFIX}.csv"
 export WRITE_PERF_CSV TABLE_TYPE IS_LOGICAL_TIMESTAMP_ENABLED
 
-# Log file: logs/<YYYYMMDD_HHMMSS>/e2e_<table>_v<ver>_<lts>.log
+# Log file: logs/<YYYYMMDD>/e2e_<table>_v<ver>_<lts>.log
 LOG_DIR="${SCRIPT_DIR}/logs"
-LOG_RUN_ID="$(date +%Y%m%d_%H%M%S)"
+LOG_RUN_ID="$(date +%Y%m%d)"
 LOG_SUBDIR="${LOG_DIR}/${LOG_RUN_ID}"
 mkdir -p "$LOG_SUBDIR"
 LOG_FILE="${LOG_SUBDIR}/e2e_${TABLE_TYPE_LOWER}_v${TARGET_VERSION}_${IS_LOGICAL_TIMESTAMP_ENABLED}.log"
@@ -125,7 +125,7 @@ echo "Log file: $LOG_FILE"
 
 # If state file exists on S3, download to local so we resume from last run
 if aws s3 ls "$S3_STATE_FILE" &>/dev/null; then
-  log_echo "Downloading existing state from S3: $S3_STATE_FILE"
+  echo "Downloading existing state from S3: $S3_STATE_FILE"
   aws s3 cp "$S3_STATE_FILE" "$E2E_STATE_FILE" --only-show-errors 2>&1 | tee -a "$LOG_FILE" || true
 fi
 
@@ -174,7 +174,7 @@ upload_benchmark_csv_to_s3() {
   local f
   for f in "${REPORTS_DIR}"/hudi_benchmark_results*.csv; do
     if [[ -f "$f" ]]; then
-      log_echo "Uploading $(basename "$f") to S3: ${BASE_PATH}/reports/$(basename "$f")"
+      echo "Uploading $(basename "$f") to S3: ${BASE_PATH}/reports/$(basename "$f")"
       aws s3 cp "$f" "${BASE_PATH}/reports/$(basename "$f")" --only-show-errors 2>&1 | tee -a "$LOG_FILE" || true
     fi
   done
@@ -187,7 +187,7 @@ upload_write_perf_csv_to_s3() {
   local f
   for f in "${REPORTS_DIR}"/hudi_write_performance*.csv; do
     if [[ -f "$f" ]]; then
-      log_echo "Uploading write performance $(basename "$f") to S3: ${BASE_PATH}/reports/$(basename "$f")"
+      echo "Uploading write performance $(basename "$f") to S3: ${BASE_PATH}/reports/$(basename "$f")"
       aws s3 cp "$f" "${BASE_PATH}/reports/$(basename "$f")" --only-show-errors 2>&1 | tee -a "$LOG_FILE" || true
     fi
   done
@@ -240,9 +240,9 @@ TOTAL_BATCHES=4
 TOTAL_STEPS=$((TOTAL_BATCHES * 3))
 
 for ((BATCH_ID=0; BATCH_ID<TOTAL_BATCHES; BATCH_ID++)); do
+    start_time=$(date +%s)
     log_hipen
     log_echo "Processing batch $BATCH_ID..."
-    log_hipen
 
     job_type="incremental"
     if [[ "$BATCH_ID" == 0 ]]; then
@@ -278,8 +278,15 @@ for ((BATCH_ID=0; BATCH_ID<TOTAL_BATCHES; BATCH_ID++)); do
     upload_benchmark_csv_to_s3
     upload_write_perf_csv_to_s3
 
-    log_hipen
-    log_info "Batch $BATCH_ID processing completed"
+    end_time=$(date +%s)
+    duration=$((end_time - start_time))
+    if [[ "$OSTYPE" == "darwin"* ]]; then
+      duration_formatted=$(date -u -r "$duration" +%H:%M:%S)
+    else
+      duration_formatted=$(date -u -d "@$duration" +%H:%M:%S)
+    fi
+    
+    log_info "Batch $BATCH_ID processing completed in $duration_formatted ..."
     log_hipen
 done
 
@@ -289,15 +296,15 @@ if [[ "$DRY_RUN" != true ]]; then
   upload_write_perf_csv_to_s3
   if [[ -f "$LOG_FILE" ]]; then
     S3_LOG_FILE="${S3_LOGS_DIR}/${LOG_RUN_ID}/$(basename "$LOG_FILE")"
-    log_echo "Uploading log to S3: $S3_LOG_FILE"
+    echo "Uploading log to S3: $S3_LOG_FILE"
     aws s3 cp "$LOG_FILE" "$S3_LOG_FILE" --only-show-errors 2>&1 | tee -a "$LOG_FILE" || true
   fi
-  log_echo "E2E state synced to S3 after each step: $S3_STATE_FILE"
+  echo "E2E state synced to S3 after each step: $S3_STATE_FILE"
 fi
 
 log_equal
-log_echo "E2E performance test completed"
-log_info "Report (read)  : $BENCHMARK_CSV_PATH"
-log_info "Report (write) : $WRITE_PERF_CSV"
-log_info "Log file       : $LOG_FILE"
+echo "E2E performance test completed"
+echo "Report (read)  : $BENCHMARK_CSV_PATH"
+echo "Report (write) : $WRITE_PERF_CSV"
+echo "Log file       : $LOG_FILE"
 log_equal
