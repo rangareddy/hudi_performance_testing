@@ -168,10 +168,6 @@ log_info "spark-submit command: $SPARK_HOME/bin/spark-submit \
   --jars "$HUDI_JARS,$AWS_S3_JARS" \
   --properties-file "${SPARK_DEFAULTS_CONF}" \
   --conf spark.sql.adaptive.enabled=true \
-  --conf spark.hadoop.mapreduce.fileoutputcommitter.algorithm.version=2 \
-  --conf spark.hadoop.fs.s3a.committer.name=directory \
-  --conf spark.sql.sources.commitProtocolClass=org.apache.spark.internal.io.cloud.PathOutputCommitProtocol \
-  --conf spark.sql.parquet.output.committer.class=org.apache.spark.internal.io.cloud.BindingParquetOutputCommitter \
   --conf spark.serializer=org.apache.spark.serializer.KryoSerializer \
   --conf spark.sql.extensions=org.apache.spark.sql.hudi.HoodieSparkSessionExtension \
   --conf spark.sql.catalog.spark_catalog=org.apache.spark.sql.hudi.catalog.HoodieCatalog \
@@ -210,13 +206,9 @@ _wp_start=$(date +%s)
 if time "${SPARK_HOME}/bin/spark-submit" \
   --master yarn \
   --deploy-mode client \
-  --jars "$HUDI_JARS" \
+  --jars "$HUDI_JARS,$AWS_S3_JARS" \
   --properties-file "${SPARK_DEFAULTS_CONF}" \
   --conf spark.sql.adaptive.enabled=true \
-  --conf spark.hadoop.mapreduce.fileoutputcommitter.algorithm.version=2 \
-  --conf spark.hadoop.fs.s3a.committer.name=directory \
-  --conf spark.sql.sources.commitProtocolClass=org.apache.spark.internal.io.cloud.PathOutputCommitProtocol \
-  --conf spark.sql.parquet.output.committer.class=org.apache.spark.internal.io.cloud.BindingParquetOutputCommitter \
   --conf spark.serializer=org.apache.spark.serializer.KryoSerializer \
   --conf spark.sql.extensions=org.apache.spark.sql.hudi.HoodieSparkSessionExtension \
   --conf spark.sql.catalog.spark_catalog=org.apache.spark.sql.hudi.catalog.HoodieCatalog \
