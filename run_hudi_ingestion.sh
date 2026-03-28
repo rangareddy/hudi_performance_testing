@@ -188,7 +188,7 @@ append_hudi_write_perf() {
 }
 
 _wp_start=$(date +%s)
-if "${SPARK_HOME}/bin/spark-submit" \
+if time "${SPARK_HOME}/bin/spark-submit" \
   --master yarn \
   --deploy-mode client \
   --jars "$HUDI_JARS" \
