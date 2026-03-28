@@ -80,6 +80,7 @@ fi
 TABLE_TYPE_UPPER=$(echo "$TABLE_TYPE_ARG" | tr '[:lower:]' '[:upper:]')
 HUDI_VERSION_SUFFIX=$(echo "$TARGET_HUDI_VERSION" | sed 's/-.*//' | cut -d. -f1,2 | tr '.' '_')
 IS_LOGICAL_TIMESTAMP_ENABLED=${IS_LOGICAL_TIMESTAMP_ENABLED:-true}
+BASE_TABLE_NAME=${BASE_TABLE_NAME:-hudi_regular}
 
 case "$TABLE_TYPE_UPPER" in
   COPY_ON_WRITE|COW)

@@ -58,6 +58,8 @@ TABLE_TYPE_UPPER=$(echo "$TABLE_TYPE" | tr '[:lower:]' '[:upper:]')
 HUDI_VERSION_SUFFIX=$(echo "$TARGET_HUDI_VERSION" | sed 's/-.*//' | cut -d. -f1,2 | tr '.' '_')
 IS_LOGICAL_TIMESTAMP_ENABLED=${IS_LOGICAL_TIMESTAMP_ENABLED:-true}
 
+BASE_TABLE_NAME=${BASE_TABLE_NAME:-hudi_regular}
+
 case "$TABLE_TYPE_UPPER" in
   MERGE_ON_READ|MOR)
     TABLE_TYPE="MERGE_ON_READ"
