@@ -133,6 +133,8 @@ append_parquet_write_perf() {
 
 if [[ "$INGESTION_TYPE" == "initial" ]]; then
   _wp_start=$(date +%s)
+  log_info "Executing Command:"
+  echo "${SPARK_HOME}/bin/spark-shell --master yarn --deploy-mode client --jars $AWS_S3_JARS --properties-file ${SPARK_DEFAULTS_CONF} --conf spark.sql.adaptive.enabled=true --conf spark.hadoop.mapreduce.fileoutputcommitter.algorithm.version=2 --conf spark.hadoop.fs.s3a.committer.name=directory -i $EXECUTION_SCRIPT"
   if "${SPARK_HOME}/bin/spark-shell" \
     --master yarn \
     --deploy-mode client \
@@ -165,6 +167,8 @@ else
   export SOURCE_DATA="${SOURCE_DATA}/batch_0"
   log_info "Records to update per batch: ${NUM_OF_RECORDS_TO_UPDATE}"
   _wp_start=$(date +%s)
+  log_info "Executing Command:"
+  echo "${SPARK_HOME}/bin/spark-submit --master yarn --deploy-mode client --jars $AWS_S3_JARS --properties-file ${SPARK_DEFAULTS_CONF} --conf spark.sql.adaptive.enabled=true --conf spark.hadoop.mapreduce.fileoutputcommitter.algorithm.version=2 --conf spark.hadoop.fs.s3a.committer.name=directory $EXECUTION_SCRIPT"
   if "${SPARK_HOME}/bin/spark-submit" \
     --master yarn \
     --deploy-mode client \

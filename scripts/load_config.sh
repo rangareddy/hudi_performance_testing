@@ -110,9 +110,8 @@ load_config() {
   if [[ "${SKIP_SPARK_HOME_CHECK:-0}" != "1" ]]; then
     if [[ -z "${AWS_S3_JARS:-}" ]]; then
       if [[ "${IS_USE_INSTALLED_SPARK:-false}" == "true" ]]; then
-        # EMR: use explicit paths (not hadoop/lib globs — hadoop-aws.jar lives under /usr/lib/hadoop, not lib/).
-        _emr_sdk="${EMR_AWS_SDK_JAR:-/usr/lib/hive/lib/aws-java-sdk-emrwal-1.4.0.jar}"
-        _emr_ha="${EMR_HADOOP_AWS_JAR:-/usr/lib/hadoop/hadoop-aws.jar}"
+        _emr_sdk=$(ls /usr/share/aws/aws-java-sdk/aws-java-sdk-bundle*.jar | head -1)
+        _emr_ha=$(ls /usr/lib/hadoop/hadoop-aws*.jar | head -1)
         if [[ ! -f "$_emr_sdk" ]]; then
           log_error "❌ EMR AWS SDK jar not found: $_emr_sdk"
           log_error "Set EMR_AWS_SDK_JAR or AWS_S3_JARS in common.properties."
@@ -123,8 +122,8 @@ load_config() {
           log_error "Set EMR_HADOOP_AWS_JAR or AWS_S3_JARS in common.properties."
           exit 1
         fi
-        log_info "Using EMR S3 jars: $_emr_sdk + $_emr_ha"
         export AWS_S3_JARS="${_emr_sdk},${_emr_ha}"
+        log_info "Using EMR S3 jars: $AWS_S3_JARS"
       else
         _spark_jars="${SPARK_HOME}/jars"
         aws_java_sdk_bundle_jar="aws-java-sdk-bundle-${AWS_JAVA_SDK_BUNDLE_VERSION:-}.jar"
