@@ -140,10 +140,10 @@ State and artifacts (per phase: `_baseline` / `_experiment` in filenames where n
 - Local state: `.e2e_state/state_{baseline|experiment}_<table>_<IS_LOGICAL_TIMESTAMP_ENABLED>_v<ver>.txt`
 - S3 state: `${BASE_PATH}/e2e_state/state_{baseline|experiment}_...`
 - Local log: `logs/<YYYYMMDD>/e2e_<table>_v<ver>_<IS_LOGICAL_TIMESTAMP_ENABLED>.log`
-- Read benchmarks: `reports/hudi_benchmark_results_<cow|mor>_<lts>_<versions>_{baseline|experiment}.csv`
-- Write performance: `reports/hudi_write_performance_<cow|mor>_<lts>_<versions>_{baseline|experiment}.csv`
+- Read benchmarks: `reports/read/hudi_benchmark_results_<cow|mor>_<lts>_<versions>_{baseline|experiment}.csv`
+- Write performance: `reports/write/hudi_write_performance_<cow|mor>_<lts>_<versions>_{baseline|experiment}.csv`
 - Comparison: `reports/e2e_baseline_vs_experiment_<cow|mor>_<lts>_<versions>.csv`
-- S3 uploads: `${BASE_PATH}/reports/` and `${BASE_PATH}/logs/` for the above
+- S3 uploads: `${BASE_PATH}/reports/read/`, `${BASE_PATH}/reports/write/`, comparison CSVs under `${BASE_PATH}/reports/`; logs under `${BASE_PATH}/logs/`
 
 The E2E script uploads state to S3 after each step **within the current phase**, so reruns can resume baseline or experiment independently.
 

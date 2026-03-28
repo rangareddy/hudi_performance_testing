@@ -56,7 +56,6 @@ load_config() {
     if [[ "$line" =~ ^([A-Za-z_][A-Za-z0-9_]*)=(.*)$ ]]; then
       local key="${BASH_REMATCH[1]}"
       local val="${BASH_REMATCH[2]}"
-      # Expand $VAR and ${VAR} in value (so JARS_PATH=$BASE_PATH/jars works)
       val="$(eval echo "$val")"
       export "${key}=${val}"
     fi

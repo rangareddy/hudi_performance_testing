@@ -82,13 +82,16 @@ TABLE_TYPE_LOWER=$(echo "$TABLE_TYPE" | tr '[:upper:]' '[:lower:]')
 E2E_STATE_DIR="${SCRIPT_DIR}/.e2e_state"
 S3_LOGS_DIR="${BASE_PATH}/logs"
 REPORTS_DIR="${SCRIPT_DIR}/reports"
+REPORTS_READ_DIR="${REPORTS_DIR}/read"
+REPORTS_WRITE_DIR="${REPORTS_DIR}/write"
 # Per-phase state/sync (set in run_e2e_phase)
 E2E_STATE_FILE=""
 S3_STATE_FILE=""
 
-mkdir -p "$E2E_STATE_DIR" "$REPORTS_DIR"
+mkdir -p "$E2E_STATE_DIR" "$REPORTS_READ_DIR" "$REPORTS_WRITE_DIR"
 
-# Benchmark CSV path: reports/hudi_benchmark_results_<cow|mor>_<0_14|0_15|...>.csv
+# Read benchmark CSV: reports/read/hudi_benchmark_results_<cow|mor>_...
+# Write performance CSV: reports/write/hudi_write_performance_<cow|mor>_...
 if [[ "$TABLE_TYPE" == "COPY_ON_WRITE" ]]; then
   BENCHMARK_TABLE_SUFFIX="cow"
 else
@@ -108,8 +111,8 @@ BENCHMARK_VERSION_SUFFIX=$(echo $BENCHMARK_VERSION_SUFFIX | tr ' ' '_')
 [[ -z "$BENCHMARK_VERSION_SUFFIX" ]] && BENCHMARK_VERSION_SUFFIX="0_14"
 
 # Report stems (phase suffix: _baseline | _experiment added in run_e2e_phase)
-BENCHMARK_REPORT_STEM="${REPORTS_DIR}/hudi_benchmark_results_${BENCHMARK_TABLE_SUFFIX}_${IS_LOGICAL_TIMESTAMP_ENABLED}_${BENCHMARK_VERSION_SUFFIX}"
-WRITE_REPORT_STEM="${REPORTS_DIR}/hudi_write_performance_${BENCHMARK_TABLE_SUFFIX}_${IS_LOGICAL_TIMESTAMP_ENABLED}_${BENCHMARK_VERSION_SUFFIX}"
+BENCHMARK_REPORT_STEM="${REPORTS_READ_DIR}/hudi_benchmark_results_${BENCHMARK_TABLE_SUFFIX}_${IS_LOGICAL_TIMESTAMP_ENABLED}_${BENCHMARK_VERSION_SUFFIX}"
+WRITE_REPORT_STEM="${REPORTS_WRITE_DIR}/hudi_write_performance_${BENCHMARK_TABLE_SUFFIX}_${IS_LOGICAL_TIMESTAMP_ENABLED}_${BENCHMARK_VERSION_SUFFIX}"
 COMPARISON_CSV="${REPORTS_DIR}/e2e_baseline_vs_experiment_${BENCHMARK_TABLE_SUFFIX}_${IS_LOGICAL_TIMESTAMP_ENABLED}_${BENCHMARK_VERSION_SUFFIX}.csv"
 BENCHMARK_CSV_PATH=""
 WRITE_PERF_CSV=""
@@ -173,10 +176,10 @@ upload_benchmark_csv_to_s3() {
     return 0
   fi
   local f
-  for f in "${REPORTS_DIR}"/hudi_benchmark_results*.csv; do
+  for f in "${REPORTS_READ_DIR}"/hudi_benchmark_results*.csv; do
     if [[ -f "$f" ]]; then
-      echo "Uploading $(basename "$f") to S3: ${BASE_PATH}/reports/$(basename "$f")"
-      aws s3 cp "$f" "${BASE_PATH}/reports/$(basename "$f")" --only-show-errors 2>&1 | tee -a "$LOG_FILE" || true
+      echo "Uploading $(basename "$f") to S3: ${BASE_PATH}/reports/read/$(basename "$f")"
+      aws s3 cp "$f" "${BASE_PATH}/reports/read/$(basename "$f")" --only-show-errors 2>&1 | tee -a "$LOG_FILE" || true
     fi
   done
 }
@@ -186,10 +189,10 @@ upload_write_perf_csv_to_s3() {
     return 0
   fi
   local f
-  for f in "${REPORTS_DIR}"/hudi_write_performance*.csv; do
+  for f in "${REPORTS_WRITE_DIR}"/hudi_write_performance*.csv; do
     if [[ -f "$f" ]]; then
-      echo "Uploading write performance $(basename "$f") to S3: ${BASE_PATH}/reports/$(basename "$f")"
-      aws s3 cp "$f" "${BASE_PATH}/reports/$(basename "$f")" --only-show-errors 2>&1 | tee -a "$LOG_FILE" || true
+      echo "Uploading write performance $(basename "$f") to S3: ${BASE_PATH}/reports/write/$(basename "$f")"
+      aws s3 cp "$f" "${BASE_PATH}/reports/write/$(basename "$f")" --only-show-errors 2>&1 | tee -a "$LOG_FILE" || true
     fi
   done
 }
