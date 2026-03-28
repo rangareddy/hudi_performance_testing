@@ -17,7 +17,8 @@ usage() {
   log_info "  bash $SCRIPT_NAME --table-type <COPY_ON_WRITE|MERGE_ON_READ> --target-hudi-version <0.14.1|0.14.2> [--batch-id <id>]"
   log_info ""
   log_info "Options:"
-  log_info "  --batch-id    (optional) Ingest only parquet under SOURCE_DATA/batch_<id>; if omitted, use SOURCE_DATA as root."
+  log_info "  --batch-id            (optional) Ingest only parquet under SOURCE_DATA/batch_<id>; if omitted, use SOURCE_DATA as root."
+  log_info "  --table-name-suffix   (optional) Appended to table name, e.g. baseline / experiment (E2E)."
   log_info ""
   log_info "Examples:"
   log_info "  bash $SCRIPT_NAME --table-type COPY_ON_WRITE --target-hudi-version 0.14.1"
@@ -34,6 +35,7 @@ fi
 
 TARGET_HUDI_VERSION="$HUDI_VERSION"
 BATCH_ID_ARG=""
+TABLE_NAME_SUFFIX_ARG=""
 
 while [[ $# -gt 0 ]]; do
   case $1 in
@@ -59,6 +61,14 @@ while [[ $# -gt 0 ]]; do
         usage
       fi
       BATCH_ID_ARG="$2"
+      shift 2
+      ;;
+    --table-name-suffix)
+      if [[ -z "$2" ]]; then
+        log_error "❌ Error: --table-name-suffix requires a value"
+        usage
+      fi
+      TABLE_NAME_SUFFIX_ARG="$2"
       shift 2
       ;;
     -h|--help)
@@ -106,6 +116,14 @@ esac
 
 if [[ "$IS_LOGICAL_TIMESTAMP_ENABLED" == true ]]; then
   TABLE_NAME="${TABLE_NAME}_lts"
+fi
+
+if [[ -n "$TABLE_NAME_SUFFIX_ARG" ]]; then
+  if [[ ! "$TABLE_NAME_SUFFIX_ARG" =~ ^[a-zA-Z0-9_]+$ ]]; then
+    log_error "❌ Error: --table-name-suffix must be alphanumeric or underscore only"
+    exit 1
+  fi
+  TABLE_NAME="${TABLE_NAME}_${TABLE_NAME_SUFFIX_ARG}"
 fi
 
 TABLE_BASE_PATH="${DATA_PATH}/${TABLE_NAME}"

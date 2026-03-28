@@ -4,6 +4,8 @@
 #   Baseline: 5 batches — Hudi ingestion always uses SOURCE_HUDI_VERSION.
 #   Experiment: 5 batches — batches 0–2 use SOURCE_HUDI_VERSION, batches 3–4 use TARGET_HUDI_VERSION.
 #   Each batch: parquet → Hudi ingestion → read benchmark.
+#   Baseline and experiment use separate Hudi table paths (--table-name-suffix baseline|experiment).
+#   MERGE_ON_READ: after 5 batches, run compaction then read benchmark again (post-compaction CSV).
 #   After both phases: compare write + read performance (reports + S3).
 #
 # Usage:
@@ -249,6 +251,7 @@ run_e2e_phase() {
   E2E_STATE_FILE="${E2E_STATE_DIR}/state_${phase}_${TABLE_TYPE_LOWER}_${IS_LOGICAL_TIMESTAMP_ENABLED}_v${TARGET_VERSION}.txt"
   S3_STATE_FILE="${BASE_PATH}/e2e_state/state_${phase}_${TABLE_TYPE_LOWER}_${IS_LOGICAL_TIMESTAMP_ENABLED}_v${TARGET_VERSION}.txt"
   BENCHMARK_CSV_PATH="${BENCHMARK_REPORT_STEM}_${phase}.csv"
+  BENCHMARK_POST_COMPACT_CSV="${BENCHMARK_REPORT_STEM}_${phase}_post_compact.csv"
   WRITE_PERF_CSV="${WRITE_REPORT_STEM}_${phase}.csv"
   export WRITE_PERF_CSV
 
@@ -262,13 +265,17 @@ run_e2e_phase() {
   log_equal
 
   if aws s3 ls "$S3_STATE_FILE" &>/dev/null; then
-    log_echo "Downloading ${phase} state from S3: $S3_STATE_FILE"
+    echo "Downloading ${phase} state from S3: $S3_STATE_FILE"
     aws s3 cp "$S3_STATE_FILE" "$E2E_STATE_FILE" --only-show-errors 2>&1 | tee -a "$LOG_FILE" || true
   fi
 
   local step_num=0
   local TOTAL_BATCHES=5
-  local TOTAL_STEPS=$((TOTAL_BATCHES * 3))
+  local TOTAL_BATCH_STEPS=$((TOTAL_BATCHES * 3))
+  local PHASE_TOTAL_STEPS=$TOTAL_BATCH_STEPS
+  if [[ "$TABLE_TYPE" == "MERGE_ON_READ" ]]; then
+    PHASE_TOTAL_STEPS=$((TOTAL_BATCH_STEPS + 2))
+  fi
   local BATCH_ID
   local job_type
   local run_hudi_version
@@ -294,24 +301,26 @@ run_e2e_phase() {
     fi
 
     step_num=$((step_num + 1))
-    run_step "step${step_num}_${job_type}_${BATCH_ID}_parquet" "[${phase}] Step ${step_num}/${TOTAL_STEPS}: ${job_type} batch $BATCH_ID - parquet" \
+    run_step "step${step_num}_${job_type}_${BATCH_ID}_parquet" "[${phase}] Step ${step_num}/${TOTAL_BATCH_STEPS}: ${job_type} batch $BATCH_ID - parquet" \
     bash "${SCRIPT_DIR}/run_parquet_ingestion.sh" \
       --type $job_type \
       --batch-id $BATCH_ID
 
     step_num=$((step_num + 1))
-    run_step "step${step_num}_${job_type}_${BATCH_ID}_hudi" "[${phase}] Step ${step_num}/${TOTAL_STEPS}: Hudi ${job_type} (${run_hudi_version}) batch $BATCH_ID" \
+    run_step "step${step_num}_${job_type}_${BATCH_ID}_hudi" "[${phase}] Step ${step_num}/${TOTAL_BATCH_STEPS}: Hudi ${job_type} (${run_hudi_version}) batch $BATCH_ID" \
     bash "${SCRIPT_DIR}/run_hudi_ingestion.sh" \
       --table-type "$TABLE_TYPE" \
       --target-hudi-version "$run_hudi_version" \
-      --batch-id $BATCH_ID
+      --batch-id $BATCH_ID \
+      --table-name-suffix "$phase"
 
     step_num=$((step_num + 1))
-    run_step "step${step_num}_${job_type}_${BATCH_ID}_benchmark" "[${phase}] Step ${step_num}/${TOTAL_STEPS}: Benchmark batch $BATCH_ID" \
+    run_step "step${step_num}_${job_type}_${BATCH_ID}_benchmark" "[${phase}] Step ${step_num}/${TOTAL_BATCH_STEPS}: Benchmark batch $BATCH_ID" \
     python3 "${SCRIPT_DIR}/run_benchmark_suite.py" \
       --table-type "$TABLE_TYPE" \
       --hudi-versions "$HUDI_VERSIONS" \
       --batch-id $BATCH_ID \
+      --table-name-suffix "$phase" \
       --output "$BENCHMARK_CSV_PATH"
 
     upload_benchmark_csv_to_s3
@@ -328,6 +337,32 @@ run_e2e_phase() {
     log_info "[${phase}] Batch $BATCH_ID completed in $duration_formatted"
     log_info "$(log_hipen)"
   done
+
+  if [[ "$TABLE_TYPE" == "MERGE_ON_READ" ]]; then
+    local compact_version
+    if [[ "$phase" == "baseline" ]]; then
+      compact_version="$SOURCE_HUDI_VERSION"
+    else
+      compact_version="$TARGET_HUDI_VERSION"
+    fi
+    step_num=$((step_num + 1))
+    run_step "mor_${phase}_compaction" "[${phase}] Step ${step_num}/${PHASE_TOTAL_STEPS}: MOR compaction (${compact_version})" \
+      bash "${SCRIPT_DIR}/run_hudi_compaction.sh" \
+        --table-type "$TABLE_TYPE" \
+        --target-hudi-version "$compact_version" \
+        --table-name-suffix "$phase"
+    upload_write_perf_csv_to_s3
+
+    step_num=$((step_num + 1))
+    run_step "mor_${phase}_benchmark_post_compact" "[${phase}] Step ${step_num}/${PHASE_TOTAL_STEPS}: MOR read benchmark after compaction" \
+      python3 "${SCRIPT_DIR}/run_benchmark_suite.py" \
+        --table-type "$TABLE_TYPE" \
+        --hudi-versions "$HUDI_VERSIONS" \
+        --batch-id 5 \
+        --table-name-suffix "$phase" \
+        --output "$BENCHMARK_POST_COMPACT_CSV"
+    upload_benchmark_csv_to_s3
+  fi
 }
 
 if [[ "$DRY_RUN" == true ]]; then
@@ -342,12 +377,21 @@ if [[ "$DRY_RUN" != true ]]; then
   log_equal
   log_info "  Baseline vs experiment comparison (read + write totals)"
   log_equal
-  python3 "${SCRIPT_DIR}/scripts/compare_e2e_phases.py" \
-    --baseline-read "${BENCHMARK_REPORT_STEM}_baseline.csv" \
-    --experiment-read "${BENCHMARK_REPORT_STEM}_experiment.csv" \
-    --baseline-write "${WRITE_REPORT_STEM}_baseline.csv" \
-    --experiment-write "${WRITE_REPORT_STEM}_experiment.csv" \
-    --output "$COMPARISON_CSV" 2>&1 | tee -a "$LOG_FILE"
+  _cmp_args=(
+    python3 "${SCRIPT_DIR}/scripts/compare_e2e_phases.py"
+    --baseline-read "${BENCHMARK_REPORT_STEM}_baseline.csv"
+    --experiment-read "${BENCHMARK_REPORT_STEM}_experiment.csv"
+    --baseline-write "${WRITE_REPORT_STEM}_baseline.csv"
+    --experiment-write "${WRITE_REPORT_STEM}_experiment.csv"
+    --output "$COMPARISON_CSV"
+  )
+  if [[ "$TABLE_TYPE" == "MERGE_ON_READ" ]]; then
+    _cmp_args+=(
+      --baseline-read-post "${BENCHMARK_REPORT_STEM}_baseline_post_compact.csv"
+      --experiment-read-post "${BENCHMARK_REPORT_STEM}_experiment_post_compact.csv"
+    )
+  fi
+  "${_cmp_args[@]}" 2>&1 | tee -a "$LOG_FILE"
   _cmp_st="${PIPESTATUS[0]}"
   if [[ "$_cmp_st" -ne 0 ]]; then
     log_echo "⚠ Comparison step failed (exit $_cmp_st); check phase CSVs under ${REPORTS_DIR}"
@@ -370,6 +414,9 @@ fi
 log_equal
 echo "E2E performance test completed"
 echo "Read benchmarks:  ${BENCHMARK_REPORT_STEM}_{baseline,experiment}.csv"
+if [[ "$TABLE_TYPE" == "MERGE_ON_READ" ]]; then
+  echo "Read (post-compact): ${BENCHMARK_REPORT_STEM}_{baseline,experiment}_post_compact.csv"
+fi
 echo "Write performance: ${WRITE_REPORT_STEM}_{baseline,experiment}.csv"
 echo "Comparison report: $COMPARISON_CSV"
 echo "Log file         : $LOG_FILE"

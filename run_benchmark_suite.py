@@ -58,7 +58,12 @@ def read_and_increment_sequence() -> int:
     return n
 
 
-def run_benchmark(table_type: str, hudi_version: str, batch_id: int) -> Tuple[Optional[float], Optional[int], str]:
+def run_benchmark(
+    table_type: str,
+    hudi_version: str,
+    batch_id: int,
+    table_name_suffix: str = "",
+) -> Tuple[Optional[float], Optional[int], str]:
     """
     Run run_hudi_benchmark.sh and parse output.
     Returns (execution_time_seconds, count, status).
@@ -75,6 +80,8 @@ def run_benchmark(table_type: str, hudi_version: str, batch_id: int) -> Tuple[Op
         "--target-hudi-version", hudi_version,
         "--batch-id", str(batch_id),
     ]
+    if table_name_suffix:
+        cmd.extend(["--table-name-suffix", table_name_suffix])
     print("Running the command: ", " ".join(cmd))
     try:
         result = subprocess.run(
@@ -138,6 +145,12 @@ def main() -> int:
         default=str(SCRIPT_DIR / DEFAULT_CSV),
         help="Output CSV path (created or appended).",
     )
+    parser.add_argument(
+        "--table-name-suffix",
+        type=str,
+        default="",
+        help="Optional suffix for Hudi table path (e.g. baseline / experiment).",
+    )
 
     args = parser.parse_args()
     if not args.hudi_versions:
@@ -159,7 +172,9 @@ def main() -> int:
     for hudi_version in hudi_versions:
         print(f"[Run #{run_sequence}] {args.table_type} @ {hudi_version} ...", flush=True)
         start_time = time.time()
-        exec_time, count, status = run_benchmark(args.table_type, hudi_version, batch_id)
+        exec_time, count, status = run_benchmark(
+            args.table_type, hudi_version, batch_id, args.table_name_suffix
+        )
         end_time = time.time()
         start_time = datetime.fromtimestamp(start_time).strftime("%Y-%m-%d %H:%M:%S")
         end_time = datetime.fromtimestamp(end_time).strftime("%Y-%m-%d %H:%M:%S")

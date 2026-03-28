@@ -17,6 +17,7 @@ usage() {
   echo "  bash $SCRIPT_NAME --table-type <COPY_ON_WRITE|MERGE_ON_READ> --target-hudi-version <SOURCE_HUDI_VERSION|TARGET_HUDI_VERSION> [--batch-id <id> --help]"
   echo ""
   echo "  --batch-id is optional (used by run_benchmark_suite.py for CSV labeling)."
+  echo "  --table-name-suffix optional (e.g. baseline / experiment for E2E)."
   echo ""
   echo "Examples:"
   echo "  bash $SCRIPT_NAME --table-type COPY_ON_WRITE --target-hudi-version SOURCE_HUDI_VERSION"
@@ -24,6 +25,8 @@ usage() {
   echo ""
   exit 1
 }
+
+TABLE_NAME_SUFFIX_ARG=""
 
 while [[ $# -gt 0 ]]; do
   case $1 in
@@ -49,6 +52,14 @@ while [[ $# -gt 0 ]]; do
         usage
       fi
       BATCH_ID_ARG="$2"
+      shift 2
+      ;;
+    --table-name-suffix)
+      if [[ -z "${2:-}" ]]; then
+        log_error "❌ Error: --table-name-suffix requires a value"
+        usage
+      fi
+      TABLE_NAME_SUFFIX_ARG="$2"
       shift 2
       ;;
     -h|--help)
@@ -88,6 +99,14 @@ esac
 
 if [[ "$IS_LOGICAL_TIMESTAMP_ENABLED" == true ]]; then
   TABLE_NAME="${TABLE_NAME}_lts"
+fi
+
+if [[ -n "$TABLE_NAME_SUFFIX_ARG" ]]; then
+  if [[ ! "$TABLE_NAME_SUFFIX_ARG" =~ ^[a-zA-Z0-9_]+$ ]]; then
+    log_error "❌ Error: --table-name-suffix must be alphanumeric or underscore only"
+    exit 1
+  fi
+  TABLE_NAME="${TABLE_NAME}_${TABLE_NAME_SUFFIX_ARG}"
 fi
 
 BENCH_DATA_PATH="${DATA_PATH}/$TABLE_NAME"

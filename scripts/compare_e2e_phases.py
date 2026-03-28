@@ -71,6 +71,18 @@ def main() -> int:
     p.add_argument("--baseline-write", type=Path, required=True)
     p.add_argument("--experiment-write", type=Path, required=True)
     p.add_argument("--output", type=Path, required=True)
+    p.add_argument(
+        "--baseline-read-post",
+        type=Path,
+        default=None,
+        help="Optional MOR post-compaction read benchmark CSV (baseline phase).",
+    )
+    p.add_argument(
+        "--experiment-read-post",
+        type=Path,
+        default=None,
+        help="Optional MOR post-compaction read benchmark CSV (experiment phase).",
+    )
     args = p.parse_args()
 
     rows: List[Dict[str, str]] = []
@@ -117,8 +129,8 @@ def main() -> int:
         }
     )
 
-    bh, _ = sum_write_seconds(args.baseline_write, "hudi")
-    eh, _ = sum_write_seconds(args.experiment_write, "hudi")
+    bh, _ = sum_write_seconds(args.baseline_write, "hudi_delta_streamer")
+    eh, _ = sum_write_seconds(args.experiment_write, "hudi_delta_streamer")
     rows.append(
         {
             "metric": "write_hudi_delta_streamer_seconds",
@@ -130,6 +142,41 @@ def main() -> int:
             "experiment_row_count_ok": "",
         }
     )
+
+    bc, _ = sum_write_seconds(args.baseline_write, "hudi_compaction")
+    ec, _ = sum_write_seconds(args.experiment_write, "hudi_compaction")
+    rows.append(
+        {
+            "metric": "write_hudi_compaction_seconds",
+            "baseline_value": f"{bc:.4f}",
+            "experiment_value": f"{ec:.4f}",
+            "delta_seconds": f"{ec - bc:.4f}",
+            "delta_percent": pct_delta(bc, ec),
+            "baseline_row_count_ok": "",
+            "experiment_row_count_ok": "",
+        }
+    )
+
+    if args.baseline_read_post and args.experiment_read_post:
+        if args.baseline_read_post.is_file() and args.experiment_read_post.is_file():
+            bpr, bpr_n = sum_read_seconds(args.baseline_read_post)
+            epr, epr_n = sum_read_seconds(args.experiment_read_post)
+            rows.append(
+                {
+                    "metric": "read_benchmark_post_compaction_total_seconds",
+                    "baseline_value": f"{bpr:.4f}",
+                    "experiment_value": f"{epr:.4f}",
+                    "delta_seconds": f"{epr - bpr:.4f}",
+                    "delta_percent": pct_delta(bpr, epr),
+                    "baseline_row_count_ok": str(bpr_n),
+                    "experiment_row_count_ok": str(epr_n),
+                }
+            )
+        else:
+            print(
+                "Note: post-compaction read CSVs not found; skipping read_benchmark_post_compaction_total_seconds",
+                file=sys.stderr,
+            )
 
     args.output.parent.mkdir(parents=True, exist_ok=True)
     fieldnames = [
