@@ -62,16 +62,16 @@ load_config() {
     fi
   done < "$config_file"
 
+  if [[ "${IS_USE_INSTALLED_SPARK:-false}" == "true" ]] && [[ -n "${TEMP_SPARK_HOME:-}" ]] && [[ -d "$TEMP_SPARK_HOME" ]]; then
+    export SPARK_HOME="$TEMP_SPARK_HOME"
+  fi
+
   if [[ "${SKIP_SPARK_HOME_CHECK:-0}" != "1" ]]; then
-    if [[ ! -d "$SPARK_HOME" && "$IS_USE_INSTALLED_SPARK" == false ]]; then
-      log_error "❌ Spark home not found: $SPARK_HOME"
-      log_error "Please run setup_node.sh to install Spark"
+    if [[ ! -d "${SPARK_HOME:-}" ]]; then
+      log_error "❌ Spark home not found: ${SPARK_HOME:-}"
+      log_error "Set IS_USE_INSTALLED_SPARK=true and TEMP_SPARK_HOME (e.g. /usr/lib/spark on EMR), or run setup_node.sh"
       exit 1
     fi
-  fi 
-
-  if [[ "${IS_USE_INSTALLED_SPARK:-false}" == "true" && -d "${TEMP_SPARK_HOME:-}" ]]; then
-    export SPARK_HOME="$TEMP_SPARK_HOME"
   fi
 
   export SPARK_MAJOR_VERSION=$(echo "${SPARK_VERSION}" | cut -d '.' -f 1,2)
@@ -81,7 +81,7 @@ load_config() {
   [[ -z "${DATA_PATH:-}" && -n "${BASE_PATH:-}" ]] && export DATA_PATH="${BASE_PATH}/data"
 
   if [[ -z "${SOURCE_DATA:-}" ]]; then
-    if [[ "${IS_LOGICAL_TIMESTAMP_ENABLED:-false}" == "true" ]]; then 
+    if [[ "${IS_LOGICAL_TIMESTAMP_ENABLED:-true}" == "true" ]]; then
       export SOURCE_DATA="${DATA_PATH}/wide_${NUM_OF_COLUMNS}cols_${NUM_OF_PARTITIONS}parts_lts"
     else
       export SOURCE_DATA="${DATA_PATH}/wide_${NUM_OF_COLUMNS}cols_${NUM_OF_PARTITIONS}parts"
@@ -108,28 +108,53 @@ load_config() {
   fi
 
   if [[ "${SKIP_SPARK_HOME_CHECK:-0}" != "1" ]]; then
-    if [[ "${IS_USE_INSTALLED_SPARK:-false}" == "true" && -z "${AWS_S3_JARS:-}" ]]; then
-        hadoop_aws_jar=$(ls /usr/lib/hadoop/lib/hadoop-aws*.jar 2>/dev/null | head -1)  
-        aws_java_sdk_bundle_jar=$(ls /usr/lib/hadoop/lib/aws-java-sdk-bundle*.jar 2>/dev/null | head -1)
-        if [[ -n "$hadoop_aws_jar" && -n "$aws_java_sdk_bundle_jar" ]]; then
-            export AWS_S3_JARS="${aws_java_sdk_bundle_jar},${hadoop_aws_jar}"
-        else
-            log_error "❌ Could not auto-locate AWS S3 JARs on EMR paths."
+    if [[ -z "${AWS_S3_JARS:-}" ]]; then
+      if [[ "${IS_USE_INSTALLED_SPARK:-false}" == "true" ]]; then
+        # EMR: use explicit paths (not hadoop/lib globs — hadoop-aws.jar lives under /usr/lib/hadoop, not lib/).
+        _emr_sdk="${EMR_AWS_SDK_JAR:-/usr/lib/hive/lib/aws-java-sdk-emrwal-1.4.0.jar}"
+        _emr_ha="${EMR_HADOOP_AWS_JAR:-/usr/lib/hadoop/hadoop-aws.jar}"
+        if [[ ! -f "$_emr_sdk" ]]; then
+          log_error "❌ EMR AWS SDK jar not found: $_emr_sdk"
+          log_error "Set EMR_AWS_SDK_JAR or AWS_S3_JARS in common.properties."
+          exit 1
         fi
-    elif [[ -z "${AWS_S3_JARS:-}" ]]; then
-      aws_java_sdk_bundle_jar="aws-java-sdk-bundle-$AWS_JAVA_SDK_BUNDLE_VERSION.jar"
-      hadoop_aws_jar="hadoop-aws-$HADOOP_VERSION.jar"
-      if [[ ! -f "${SPARK_HOME}/jars/$aws_java_sdk_bundle_jar" ]]; then
-        log_error "❌ AWS Java SDK Bundle Jar not found: ${SPARK_HOME}/jars/$aws_java_sdk_bundle_jar"
-        exit 1
+        if [[ ! -f "$_emr_ha" ]]; then
+          log_error "❌ EMR hadoop-aws jar not found: $_emr_ha"
+          log_error "Set EMR_HADOOP_AWS_JAR or AWS_S3_JARS in common.properties."
+          exit 1
+        fi
+        log_info "Using EMR S3 jars: $_emr_sdk + $_emr_ha"
+        export AWS_S3_JARS="${_emr_sdk},${_emr_ha}"
+      else
+        _spark_jars="${SPARK_HOME}/jars"
+        aws_java_sdk_bundle_jar="aws-java-sdk-bundle-${AWS_JAVA_SDK_BUNDLE_VERSION:-}.jar"
+        hadoop_aws_jar="hadoop-aws-${HADOOP_VERSION:-}.jar"
+        _aws_path="${_spark_jars}/${aws_java_sdk_bundle_jar}"
+        _ha_path="${_spark_jars}/${hadoop_aws_jar}"
+        if [[ ! -f "$_aws_path" ]]; then
+          shopt -s nullglob
+          _cand=("${_spark_jars}"/aws-java-sdk-bundle-*.jar)
+          shopt -u nullglob
+          [[ ${#_cand[@]} -gt 0 ]] && _aws_path="${_cand[0]}"
+        fi
+        if [[ ! -f "$_ha_path" ]]; then
+          shopt -s nullglob
+          _cand=("${_spark_jars}"/hadoop-aws-*.jar)
+          shopt -u nullglob
+          [[ ${#_cand[@]} -gt 0 ]] && _ha_path="${_cand[0]}"
+        fi
+        if [[ ! -f "$_aws_path" ]]; then
+          log_error "❌ AWS Java SDK bundle jar not found under ${_spark_jars}"
+          exit 1
+        fi
+        if [[ ! -f "$_ha_path" ]]; then
+          log_error "❌ hadoop-aws jar not found under ${_spark_jars}"
+          exit 1
+        fi
+        export AWS_S3_JARS="${_aws_path},${_ha_path}"
       fi
-      if [[ ! -f "${SPARK_HOME}/jars/$hadoop_aws_jar" ]]; then
-        log_error "❌ Hadoop AWS Jar not found: ${SPARK_HOME}/jars/$hadoop_aws_jar"
-        exit 1
-      fi
-      export AWS_S3_JARS="${SPARK_HOME}/jars/$aws_java_sdk_bundle_jar,${SPARK_HOME}/jars/$hadoop_aws_jar"
     fi
-  fi 
+  fi
   return 0
 }
 
