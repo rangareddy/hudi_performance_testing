@@ -30,9 +30,10 @@ def create_spark(app_name: str) -> SparkSession:
 
 def calculate_range(batch_id: int, num_records: int):
     """Calculate record range for the batch."""
-    start = (batch_id - 1) * num_records + 1
-    end = batch_id * num_records + 1
-    return start, end
+    if batch_id == 0:
+        return 1, num_records
+    else:
+        return (batch_id - 1) * num_records + 1, batch_id * num_records + 1
 
 
 def generate_values(start: int, end: int, batch_id: int):
@@ -46,6 +47,7 @@ def run_incremental_batch(spark: SparkSession, batch_id: int):
     num_records = get_env_int("NUM_OF_RECORDS_TO_UPDATE", 100)
     source_data_path = os.environ.get("SOURCE_DATA")
     target_data_path = os.environ.get("TARGET_DATA")
+    is_repeat_same_batch = os.environ.get("IS_REPEAT_SAME_BATCH", "false")
 
     if not source_data_path:
         print("❌ SOURCE_DATA not found in environment")
@@ -56,8 +58,11 @@ def run_incremental_batch(spark: SparkSession, batch_id: int):
         sys.exit(1)
 
     print(f"🚀 Starting incremental batch {batch_id}")
-    
-    start, end = calculate_range(batch_id, num_records)
+    if is_repeat_same_batch:
+        start, end = calculate_range(0, num_records)
+    else:
+        start, end = calculate_range(batch_id, num_records)
+
     values = generate_values(start, end, batch_id)
 
     print(f"📍 Reading from: {source_data_path}")
