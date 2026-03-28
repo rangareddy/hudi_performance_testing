@@ -63,14 +63,14 @@ load_config() {
   done < "$config_file"
 
   if [[ "${SKIP_SPARK_HOME_CHECK:-0}" != "1" ]]; then
-    if [ ! -d "$SPARK_HOME" && "$IS_USE_INSTALLED_SPARK" == false ]; then
+    if [[ ! -d "$SPARK_HOME" && "$IS_USE_INSTALLED_SPARK" == false ]]; then
       log_error "❌ Spark home not found: $SPARK_HOME"
       log_error "Please run setup_node.sh to install Spark"
       exit 1
     fi
   fi 
 
-  if [[ "$IS_USE_INSTALLED_SPARK" == true && -d "$TEMP_SPARK_HOME" ]]; then
+  if [[ "${IS_USE_INSTALLED_SPARK:-false}" == "true" && -d "${TEMP_SPARK_HOME:-}" ]]; then
     export SPARK_HOME="$TEMP_SPARK_HOME"
   fi
 
@@ -81,7 +81,7 @@ load_config() {
   [[ -z "${DATA_PATH:-}" && -n "${BASE_PATH:-}" ]] && export DATA_PATH="${BASE_PATH}/data"
 
   if [[ -z "${SOURCE_DATA:-}" ]]; then
-    if [ "$IS_LOGICAL_TIMESTAMP_ENABLED" == true ]; then 
+    if [[ "${IS_LOGICAL_TIMESTAMP_ENABLED:-false}" == "true" ]]; then 
       export SOURCE_DATA="${DATA_PATH}/wide_${NUM_OF_COLUMNS}cols_${NUM_OF_PARTITIONS}parts_lts"
     else
       export SOURCE_DATA="${DATA_PATH}/wide_${NUM_OF_COLUMNS}cols_${NUM_OF_PARTITIONS}parts"
