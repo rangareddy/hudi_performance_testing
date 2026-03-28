@@ -122,12 +122,12 @@ bash run_e2e_performance_test.sh --table-type MERGE_ON_READ
 bash run_e2e_performance_test_all.sh
 ```
 
-The current E2E flow runs **4 batches** and **12 steps** total:
+The E2E flow runs **two phases**, each with **5 batches** (15 steps per phase: parquet → Hudi → benchmark):
 
-- Batch `0`: initial parquet, Hudi ingestion with `SOURCE_HUDI_VERSION`, benchmark
-- Batch `1`: incremental parquet, Hudi ingestion with `SOURCE_HUDI_VERSION`, benchmark
-- Batch `2`: incremental parquet, Hudi ingestion with `TARGET_HUDI_VERSION`, benchmark
-- Batch `3`: incremental parquet, Hudi ingestion with `TARGET_HUDI_VERSION`, benchmark
+1. **Baseline** — Hudi ingestion uses **`SOURCE_HUDI_VERSION` only** for batches `0–4` (batch `0` = initial, `1–4` = incremental).
+2. **Experiment** — batches `0–2` use **`SOURCE_HUDI_VERSION`**; batches `3–4` use **`TARGET_HUDI_VERSION`**.
+
+After both phases, **`scripts/compare_e2e_phases.py`** writes **`reports/e2e_baseline_vs_experiment_*.csv`** with aggregated read and write times (baseline vs experiment, delta %).
 
 Options:
 
@@ -135,17 +135,17 @@ Options:
 - `--dry-run`: print the plan only
 - `--force`: ignore saved state and rerun all steps
 
-State and artifacts:
+State and artifacts (per phase: `_baseline` / `_experiment` in filenames where noted):
 
-- Local state file: `.e2e_state/state_<table>_<IS_LOGICAL_TIMESTAMP_ENABLED>_v<ver>.txt`
-- S3 state file: `${BASE_PATH}/e2e_state/state_<table>_<IS_LOGICAL_TIMESTAMP_ENABLED>_v<ver>.txt`
-- Local log file: `logs/<YYYYMMDD_HHMMSS>/e2e_<table>_v<ver>_<IS_LOGICAL_TIMESTAMP_ENABLED>.log`
-- S3 log upload: `${BASE_PATH}/logs/<YYYYMMDD_HHMMSS>/<log file>`
-- Read benchmark CSV (local): `reports/hudi_benchmark_results_<cow|mor>_<IS_LOGICAL_TIMESTAMP_ENABLED>_<hudi_major_minor...>.csv`
-- Write performance CSV (local): `reports/hudi_write_performance_<cow|mor>_<IS_LOGICAL_TIMESTAMP_ENABLED>_<hudi_major_minor...>.csv` (appended by parquet + Hudi ingestion when `WRITE_PERF_CSV` is set by E2E)
-- S3 uploads: `${BASE_PATH}/reports/<same filenames>` after each benchmark batch and at end; write-perf CSV uses the same pattern
+- Local state: `.e2e_state/state_{baseline|experiment}_<table>_<IS_LOGICAL_TIMESTAMP_ENABLED>_v<ver>.txt`
+- S3 state: `${BASE_PATH}/e2e_state/state_{baseline|experiment}_...`
+- Local log: `logs/<YYYYMMDD>/e2e_<table>_v<ver>_<IS_LOGICAL_TIMESTAMP_ENABLED>.log`
+- Read benchmarks: `reports/hudi_benchmark_results_<cow|mor>_<lts>_<versions>_{baseline|experiment}.csv`
+- Write performance: `reports/hudi_write_performance_<cow|mor>_<lts>_<versions>_{baseline|experiment}.csv`
+- Comparison: `reports/e2e_baseline_vs_experiment_<cow|mor>_<lts>_<versions>.csv`
+- S3 uploads: `${BASE_PATH}/reports/` and `${BASE_PATH}/logs/` for the above
 
-The E2E script uploads state to S3 after each step, so reruns skip successful steps and retry failed ones.
+The E2E script uploads state to S3 after each step **within the current phase**, so reruns can resume baseline or experiment independently.
 
 ## Script Reference
 
@@ -157,6 +157,7 @@ The E2E script uploads state to S3 after each step, so reruns skip successful st
 | `run_hudi_ingestion.sh` | Runs Hudi Delta Streamer for a table type and Hudi version; validates required files before running. |
 | `run_hudi_benchmark.sh` | Runs a single Spark benchmark against a Hudi table. |
 | `run_benchmark_suite.py` | Runs benchmarks for multiple Hudi versions and writes CSV rows with run sequence and batch id. |
-| `run_e2e_performance_test.sh` | Full 4-batch E2E flow with S3-backed state, log upload, and CSV upload. |
+| `run_e2e_performance_test.sh` | Baseline (5 batches, all SOURCE) + experiment (5 batches, mixed SOURCE/TARGET), comparison report, S3 uploads. |
+| `scripts/compare_e2e_phases.py` | Aggregates read/write CSVs from baseline vs experiment into one comparison CSV. |
 
 Use `-h` or `--help` on any script for the latest CLI usage.
