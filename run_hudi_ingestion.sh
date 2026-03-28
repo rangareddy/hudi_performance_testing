@@ -165,7 +165,7 @@ log_hipen
 log_info "spark-submit command: $SPARK_HOME/bin/spark-submit \
   --master yarn \
   --deploy-mode client \
-  --jars "$HUDI_JARS" \
+  --jars "$HUDI_JARS,$AWS_S3_JARS" \
   --properties-file "${SPARK_DEFAULTS_CONF}" \
   --conf spark.sql.adaptive.enabled=true \
   --conf spark.hadoop.mapreduce.fileoutputcommitter.algorithm.version=2 \
