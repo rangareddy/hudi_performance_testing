@@ -155,6 +155,12 @@ if [[ "$INGESTION_TYPE" == "initial" ]]; then
     append_parquet_write_perf "$_wp_dur" "failure"
   fi
 else
+  export IS_REPEAT_SAME_BATCH=${IS_REPEAT_SAME_BATCH:-true}
+  if [[ "$IS_REPEAT_SAME_BATCH" == true ]]; then
+    export BATCH_ID=0
+  else
+    export BATCH_ID=$BATCH_ID
+  fi
   export NUM_OF_RECORDS_TO_UPDATE=${NUM_OF_RECORDS_TO_UPDATE:-100}
   export SOURCE_DATA="${SOURCE_DATA}/batch_0"
   log_info "Records to update per batch: ${NUM_OF_RECORDS_TO_UPDATE}"
