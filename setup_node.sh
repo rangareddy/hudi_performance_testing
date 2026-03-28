@@ -52,6 +52,15 @@ download_hudi_jars() {
   fi
 }
 
+# Returns installed Spark x.y.z from SPARK_HOME, or empty if unknown
+get_installed_spark_version() {
+  if [[ -z "${SPARK_HOME:-}" || ! -d "$SPARK_HOME" || ! -x "${SPARK_HOME}/bin/spark-submit" ]]; then
+    echo ""
+    return 0
+  fi
+  "${SPARK_HOME}/bin/spark-submit" --version 2>&1 | grep -oE 'version [0-9]+\.[0-9]+\.[0-9]+' | head -1 | awk '{print $2}'
+}
+
 setup_spark() {
   log_info "Setting the Spark $SPARK_VERSION with Hadoop $HADOOP_MAJOR_VERSION"
   log_hipen
@@ -84,7 +93,16 @@ setup_spark() {
   fi
 }
 
-setup_spark
+INSTALLED_SPARK_VERSION="$(get_installed_spark_version)"
+if [[ -n "$INSTALLED_SPARK_VERSION" && "$INSTALLED_SPARK_VERSION" == "$SPARK_VERSION" ]]; then
+  log_success "Spark $SPARK_VERSION already installed at $SPARK_HOME (matches common.properties); skipping setup_spark"
+else
+  if [[ -n "$INSTALLED_SPARK_VERSION" ]]; then
+    log_info "Installed Spark version ($INSTALLED_SPARK_VERSION) differs from configured $SPARK_VERSION; running setup_spark"
+  fi
+  setup_spark
+fi
+
 download_hudi_jars "$SOURCE_HUDI_VERSION"
 download_hudi_jars "$TARGET_HUDI_VERSION"
 
