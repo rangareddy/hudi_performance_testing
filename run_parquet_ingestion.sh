@@ -66,6 +66,9 @@ if [[ ! "$BATCH_ID" =~ ^[0-9]+$ ]]; then
   exit 1
 fi
 
+# E2E batch id for reporting (incremental job may export BATCH_ID=0 for IS_REPEAT_SAME_BATCH)
+REQUESTED_BATCH_ID="$BATCH_ID"
+
 if [[ "$INGESTION_TYPE" != "initial" ]] && [[ "$INGESTION_TYPE" != "incremental" ]]; then
   log_error "❌ Invalid Ingestion Type: $INGESTION_TYPE"
   echo "Allowed values: initial or incremental"
@@ -81,12 +84,26 @@ if [ -z "${SOURCE_DATA:-}" ]; then
   exit 1
 fi
 
-export BATCH_ID
-export TARGET_DATA="${SOURCE_DATA}/batch_${BATCH_ID}"
+append_parquet_write_perf() {
+  local duration_sec="$1"
+  local status="$2"
+  [[ -z "${WRITE_PERF_CSV:-}" ]] && return 0
+  mkdir -p "$(dirname "$WRITE_PERF_CSV")"
+  local header="run_timestamp_utc,table_type,operation,batch_id,hudi_version,execution_time_seconds,status,is_logical_timestamp_enabled"
+  if [[ ! -f "$WRITE_PERF_CSV" ]]; then
+    echo "$header" > "$WRITE_PERF_CSV"
+  fi
+  echo "$(date -u +"%Y-%m-%d %H:%M:%S"),${TABLE_TYPE:-},parquet_${INGESTION_TYPE},${REQUESTED_BATCH_ID},,${duration_sec},${status},${IS_LOGICAL_TIMESTAMP_ENABLED:-true}" >> "$WRITE_PERF_CSV"
+}
+
+export TARGET_DATA="${SOURCE_DATA}/batch_${REQUESTED_BATCH_ID}"
 if aws s3 ls "$TARGET_DATA" > /dev/null 2>&1; then
-  log_success "✅ Target data already exists at ${TARGET_DATA}. Skipping ${INGESTION_TYPE_TITLE} ingestion for batch ${BATCH_ID}."
+  log_success "✅ Target data already exists at ${TARGET_DATA}. Skipping ${INGESTION_TYPE_TITLE} ingestion for batch ${REQUESTED_BATCH_ID}."
+  append_parquet_write_perf 0 skipped_existing
   exit 0
 fi
+
+export BATCH_ID="$REQUESTED_BATCH_ID"
 
 EXECUTION_SCRIPT=$INCREMENTAL_SCRIPT
 if [[ "$INGESTION_TYPE" == "initial" ]]; then
@@ -119,18 +136,6 @@ export NUM_OF_PARTITIONS=${NUM_OF_PARTITIONS:-10000}
 log_info "Executing $INGESTION_TYPE_TITLE ingestion"
 log_info "Dataset configuration: columns=${NUM_OF_COLUMNS}, partitions=${NUM_OF_PARTITIONS}"
 
-append_parquet_write_perf() {
-  local duration_sec="$1"
-  local status="$2"
-  [[ -z "${WRITE_PERF_CSV:-}" ]] && return 0
-  mkdir -p "$(dirname "$WRITE_PERF_CSV")"
-  local header="run_timestamp_utc,table_type,operation,batch_id,hudi_version,execution_time_seconds,status,is_logical_timestamp_enabled"
-  if [[ ! -f "$WRITE_PERF_CSV" ]]; then
-    echo "$header" > "$WRITE_PERF_CSV"
-  fi
-  echo "$(date -u +"%Y-%m-%d %H:%M:%S"),${TABLE_TYPE:-},parquet_${INGESTION_TYPE},${BATCH_ID},,${duration_sec},${status},${IS_LOGICAL_TIMESTAMP_ENABLED:-true}" >> "$WRITE_PERF_CSV"
-}
-
 if [[ "$INGESTION_TYPE" == "initial" ]]; then
   _wp_start=$(date +%s)
   log_info "Executing Command:"
@@ -148,7 +153,7 @@ if [[ "$INGESTION_TYPE" == "initial" ]]; then
     EXECUTION_STATUS_CODE=0
     _wp_end=$(date +%s)
     _wp_dur=$((_wp_end - _wp_start))
-    log_info "Write Execution Complete. parquet_initial batch ${BATCH_ID}. Total execution time: ${_wp_dur} seconds"
+    log_info "Write Execution Complete. parquet_initial batch ${REQUESTED_BATCH_ID}. Total execution time: ${_wp_dur} seconds"
     append_parquet_write_perf "$_wp_dur" "ok"
   else
     EXECUTION_STATUS_CODE=$?
@@ -182,7 +187,7 @@ else
     EXECUTION_STATUS_CODE=0
     _wp_end=$(date +%s)
     _wp_dur=$((_wp_end - _wp_start))
-    log_info "Write Execution Complete. parquet_incremental batch ${BATCH_ID}. Total execution time: ${_wp_dur} seconds"
+    log_info "Write Execution Complete. parquet_incremental batch ${REQUESTED_BATCH_ID}. Total execution time: ${_wp_dur} seconds"
     append_parquet_write_perf "$_wp_dur" "ok"
   else
     EXECUTION_STATUS_CODE=$?
@@ -195,7 +200,7 @@ fi
 log_basic_info() {
   log_hipen
   log_info "Ingestion Type : ${INGESTION_TYPE_TITLE}"
-  log_info "Batch ID       : ${BATCH_ID}"
+  log_info "Batch ID       : ${REQUESTED_BATCH_ID}"
   log_info "Target Path    : ${TARGET_DATA}"
   log_hipen
 }
