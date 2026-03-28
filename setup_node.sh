@@ -33,7 +33,8 @@ download_hudi_jars() {
   hudi_spark_bundle_jar="hudi-spark${SPARK_MAJOR_VERSION}-bundle_${SCALA_VERSION}-${hudi_version}.jar"
   hudi_utilities_slim_bundle_jar="hudi-utilities-slim-bundle_${SCALA_VERSION}-${hudi_version}.jar"
   if [[ ! -f "$JARS_PATH/$hudi_spark_bundle_jar" ]]; then
-    aws s3 cp $S3_JARS_PATH/${hudi_version_suffix}/$hudi_spark_bundle_jar $JARS_PATH/$hudi_spark_bundle_jar
+    aws s3 cp $S3_JARS_PATH/${hudi_version_suffix}/${SPARK_MAJOR_VERSION}/${hudi_spark_bundle_jar} \
+      $JARS_PATH/${hudi_spark_bundle_jar}
     if [ $? -eq 0 ]; then
       log_success "Hudi Spark Bundle $hudi_spark_bundle_jar downloaded successfully"
     else
@@ -42,7 +43,8 @@ download_hudi_jars() {
     fi
   fi
   if [[ ! -f "$JARS_PATH/$hudi_utilities_slim_bundle_jar" ]]; then
-    aws s3 cp $S3_JARS_PATH/${hudi_version_suffix}/$hudi_utilities_slim_bundle_jar $JARS_PATH/$hudi_utilities_slim_bundle_jar
+    aws s3 cp $S3_JARS_PATH/${hudi_version_suffix}/${SPARK_MAJOR_VERSION}/$hudi_utilities_slim_bundle_jar \
+      $JARS_PATH/$hudi_utilities_slim_bundle_jar
     if [ $? -eq 0 ]; then
       log_success "Hudi Utilities Slim Bundle $hudi_utilities_slim_bundle_jar downloaded successfully"
     else
@@ -54,7 +56,6 @@ download_hudi_jars() {
 
 # Returns installed Spark x.y.z from SPARK_HOME, or empty if unknown
 get_installed_spark_version() {
-  TEMP_SPARK_HOME=/usr/lib/spark
   if [ -d $TEMP_SPARK_HOME ]; then
     export SPARK_HOME=$TEMP_SPARK_HOME
   fi 
