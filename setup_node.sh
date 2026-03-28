@@ -54,6 +54,10 @@ download_hudi_jars() {
 
 # Returns installed Spark x.y.z from SPARK_HOME, or empty if unknown
 get_installed_spark_version() {
+  TEMP_SPARK_HOME=/usr/lib/spark
+  if [ -d $TEMP_SPARK_HOME ]; then
+    export SPARK_HOME=$TEMP_SPARK_HOME
+  fi 
   if [[ -z "${SPARK_HOME:-}" || ! -d "$SPARK_HOME" || ! -x "${SPARK_HOME}/bin/spark-submit" ]]; then
     echo ""
     return 0
