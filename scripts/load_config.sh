@@ -109,23 +109,26 @@ load_config() {
 
   if [[ "${SKIP_SPARK_HOME_CHECK:-0}" != "1" ]]; then
     if [[ "${IS_USE_INSTALLED_SPARK:-false}" == "true" && -z "${AWS_S3_JARS:-}" ]]; then
-        hadoop_aws_jar=$(ls /usr/lib/hadoop/hadoop-aws*.jar | head -1)  
-        aws_java_sdk_bundle_jar=$(ls /usr/lib/hive/lib/aws-java-sdk*.jar | head -1)
-        export AWS_S3_JARS="${aws_java_sdk_bundle_jar},${hadoop_aws_jar}"
+        hadoop_aws_jar=$(ls /usr/lib/hadoop/lib/hadoop-aws*.jar 2>/dev/null | head -1)  
+        aws_java_sdk_bundle_jar=$(ls /usr/lib/hadoop/lib/aws-java-sdk-bundle*.jar 2>/dev/null | head -1)
+        if [[ -n "$hadoop_aws_jar" && -n "$aws_java_sdk_bundle_jar" ]]; then
+            export AWS_S3_JARS="${aws_java_sdk_bundle_jar},${hadoop_aws_jar}"
+        else
+            log_error "❌ Could not auto-locate AWS S3 JARs on EMR paths."
+        fi
     elif [[ -z "${AWS_S3_JARS:-}" ]]; then
-        aws_java_sdk_bundle_jar="aws-java-sdk-bundle-$AWS_JAVA_SDK_BUNDLE_VERSION.jar"
-        hadoop_aws_jar="hadoop-aws-$HADOOP_VERSION.jar"
-        if [[ ! -f "${SPARK_HOME}/jars/$aws_java_sdk_bundle_jar" ]]; then
-          log_error "❌ AWS Java SDK Bundle Jar not found: ${SPARK_HOME}/jars/$aws_java_sdk_bundle_jar"
-          exit 1
-        fi
-        if [[ ! -f "${SPARK_HOME}/jars/$hadoop_aws_jar" ]]; then
-          log_error "❌ Hadoop AWS Jar not found: ${SPARK_HOME}/jars/$hadoop_aws_jar"
-          exit 1
-        fi
-        export AWS_S3_JARS="${SPARK_HOME}/jars/$aws_java_sdk_bundle_jar,${SPARK_HOME}/jars/$hadoop_aws_jar"
+      aws_java_sdk_bundle_jar="aws-java-sdk-bundle-$AWS_JAVA_SDK_BUNDLE_VERSION.jar"
+      hadoop_aws_jar="hadoop-aws-$HADOOP_VERSION.jar"
+      if [[ ! -f "${SPARK_HOME}/jars/$aws_java_sdk_bundle_jar" ]]; then
+        log_error "❌ AWS Java SDK Bundle Jar not found: ${SPARK_HOME}/jars/$aws_java_sdk_bundle_jar"
+        exit 1
       fi
-    fi 
+      if [[ ! -f "${SPARK_HOME}/jars/$hadoop_aws_jar" ]]; then
+        log_error "❌ Hadoop AWS Jar not found: ${SPARK_HOME}/jars/$hadoop_aws_jar"
+        exit 1
+      fi
+      export AWS_S3_JARS="${SPARK_HOME}/jars/$aws_java_sdk_bundle_jar,${SPARK_HOME}/jars/$hadoop_aws_jar"
+    fi
   fi 
   return 0
 }
