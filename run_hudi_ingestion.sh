@@ -145,11 +145,20 @@ if [ ! -f "$HUDI_SPARK_JAR" ]; then
   log_error "❌ Hudi Spark Bundle Jar not found: $HUDI_SPARK_JAR"
   exit 1
 fi
-HUDI_JARS="${HUDI_SPARK_JAR},${HUDI_UTILITIES_JAR}" 
+HUDI_JARS="${HUDI_SPARK_JAR},${HUDI_UTILITIES_JAR}"
 
-log_equal
-log_info "Running Delta Streamer"
-log_hipen
+# MOR: keep delta logs for offline HoodieCompactor (inline/async compaction would leave nothing to schedule).
+MOR_STREAMER_CONFS=()
+if [[ "$TABLE_TYPE" == "MERGE_ON_READ" ]]; then
+  MOR_STREAMER_CONFS+=(
+    --hoodie-conf hoodie.compact.inline=false
+    --hoodie-conf hoodie.datasource.compaction.async.enable=false
+  )
+fi
+
+log_info "$(log_equal)"
+log_info "Running Hudi Streamer"
+log_info "$(log_hipen)"
 log_info "HUDI_VERSION    : $TARGET_HUDI_VERSION"
 log_info "TABLE_TYPE      : $TABLE_TYPE"
 log_info "TABLE_NAME      : $TABLE_NAME"
@@ -157,10 +166,10 @@ log_info "TABLE_BASE_PATH : $TABLE_BASE_PATH"
 log_info "SOURCE_DATA     : $SOURCE_DATA"
 log_info "Streamer root   : $STREAMER_SOURCE_ROOT"
 log_info "HUDI_JARS       : $HUDI_JARS"
-log_equal
+log_info "$(log_equal)"
 
 log_info "Executing spark-submit command: "
-log_hipen
+log_info "$(log_hipen)"
 
 log_info "spark-submit command: $SPARK_HOME/bin/spark-submit \
   --master yarn \
@@ -186,8 +195,12 @@ log_info "spark-submit command: $SPARK_HOME/bin/spark-submit \
   --hoodie-conf hoodie.streamer.schemaprovider.target.schema.file="$SCHEMA_FILE_ARG" \
   --hoodie-conf hoodie.datasource.write.recordkey.field=col_1 \
   --hoodie-conf hoodie.datasource.write.precombine.field=col_1 \
-  --hoodie-conf hoodie.datasource.write.partitionpath.field=partition_col"  
-log_hipen
+  --hoodie-conf hoodie.datasource.write.partitionpath.field=partition_col"
+if [[ ${#MOR_STREAMER_CONFS[@]} -gt 0 ]]; then
+  log_info "MOR streamer extra: ${MOR_STREAMER_CONFS[*]}"
+fi
+log_info "$(log_hipen)" 
+
 
 append_hudi_write_perf() {
   local duration_sec="$1"
@@ -227,7 +240,8 @@ if time "${SPARK_HOME}/bin/spark-submit" \
   --hoodie-conf hoodie.streamer.schemaprovider.target.schema.file="$SCHEMA_FILE_ARG" \
   --hoodie-conf hoodie.datasource.write.recordkey.field=col_1 \
   --hoodie-conf hoodie.datasource.write.precombine.field=col_1 \
-  --hoodie-conf hoodie.datasource.write.partitionpath.field=partition_col
+  --hoodie-conf hoodie.datasource.write.partitionpath.field=partition_col \
+  "${MOR_STREAMER_CONFS[@]}"
 then
   _wp_end=$(date +%s)
   _wp_dur=$((_wp_end - _wp_start))
