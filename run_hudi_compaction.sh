@@ -126,13 +126,9 @@ _wp_start=$(date +%s)
 if "${SPARK_HOME}/bin/spark-submit" \
   --master yarn \
   --deploy-mode client \
-  --jars "$HUDI_JARS" \
+  --jars "$HUDI_JARS,$AWS_S3_JARS" \
   --properties-file "${SPARK_DEFAULTS_CONF}" \
   --conf spark.sql.adaptive.enabled=true \
-  --conf spark.hadoop.mapreduce.fileoutputcommitter.algorithm.version=2 \
-  --conf spark.hadoop.fs.s3a.committer.name=directory \
-  --conf spark.sql.sources.commitProtocolClass=org.apache.spark.internal.io.cloud.PathOutputCommitProtocol \
-  --conf spark.sql.parquet.output.committer.class=org.apache.spark.internal.io.cloud.BindingParquetOutputCommitter \
   --conf spark.serializer=org.apache.spark.serializer.KryoSerializer \
   --conf spark.sql.extensions=org.apache.spark.sql.hudi.HoodieSparkSessionExtension \
   --conf spark.sql.catalog.spark_catalog=org.apache.spark.sql.hudi.catalog.HoodieCatalog \
@@ -142,7 +138,13 @@ if "${SPARK_HOME}/bin/spark-submit" \
   --mode scheduleAndExecute \
   --base-path "$TABLE_BASE_PATH" \
   --table-name "$TABLE_NAME" \
-  --spark-master yarn
+  --spark-master yarn \
+  --hoodie-conf hoodie.write.concurrency.mode=optimistic_concurrency_control \
+  --hoodie-conf hoodie.write.lock.provider=org.apache.hudi.client.transaction.lock.ZookeeperBasedLockProvider \
+  --hoodie-conf hoodie.write.lock.zookeeper.url="localhost" \
+  --hoodie-conf hoodie.write.lock.zookeeper.port=2181 \
+  --hoodie-conf hoodie.write.lock.zookeeper.base_path="/hudi/locks" \
+  --hoodie-conf hoodie.write.lock.zookeeper.lock_key="$TABLE_NAME"
 then
   _wp_end=$(date +%s)
   _wp_dur=$((_wp_end - _wp_start))
