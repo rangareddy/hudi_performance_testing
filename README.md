@@ -31,7 +31,7 @@ Table names are derived from `BASE_TABLE_NAME`, table type, and the Hudi version
 ## Setup
 
 ```sh
-sudo yum install tmux -y
+sudo yum install tmux git -y
 tmux
 # tmux attach (reconnect)
 ```

@@ -146,8 +146,6 @@ if [[ "$INGESTION_TYPE" == "initial" ]]; then
     --jars $AWS_S3_JARS \
     --properties-file "${SPARK_DEFAULTS_CONF}" \
     --conf spark.sql.adaptive.enabled=true \
-    --conf spark.hadoop.mapreduce.fileoutputcommitter.algorithm.version=2 \
-    --conf spark.hadoop.fs.s3a.committer.name=directory \
     -i "$EXECUTION_SCRIPT"
   then
     EXECUTION_STATUS_CODE=0
@@ -180,8 +178,6 @@ else
     --jars $AWS_S3_JARS \
     --properties-file "${SPARK_DEFAULTS_CONF}" \
     --conf spark.sql.adaptive.enabled=true \
-    --conf spark.hadoop.mapreduce.fileoutputcommitter.algorithm.version=2 \
-    --conf spark.hadoop.fs.s3a.committer.name=directory \
     "$EXECUTION_SCRIPT"
   then
     EXECUTION_STATUS_CODE=0
