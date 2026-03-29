@@ -147,14 +147,7 @@ if [ ! -f "$HUDI_SPARK_JAR" ]; then
 fi
 HUDI_JARS="${HUDI_SPARK_JAR},${HUDI_UTILITIES_JAR}"
 
-# MOR: keep delta logs for offline HoodieCompactor (inline/async compaction would leave nothing to schedule).
-MOR_STREAMER_CONFS=()
-if [[ "$TABLE_TYPE" == "MERGE_ON_READ" ]]; then
-  MOR_STREAMER_CONFS+=(
-    --hoodie-conf hoodie.compact.inline=false
-    --hoodie-conf hoodie.datasource.compaction.async.enable=false
-  )
-fi
+# Note: Hoodie 0.15+ Delta Streamer validates hoodie.compact.inline=true (StreamSync); do not set inline=false here.
 
 log_info "$(log_equal)"
 log_info "Running Hudi Streamer"
@@ -196,10 +189,7 @@ log_info "spark-submit command: $SPARK_HOME/bin/spark-submit \
   --hoodie-conf hoodie.datasource.write.recordkey.field=col_1 \
   --hoodie-conf hoodie.datasource.write.precombine.field=col_1 \
   --hoodie-conf hoodie.datasource.write.partitionpath.field=partition_col"
-if [[ ${#MOR_STREAMER_CONFS[@]} -gt 0 ]]; then
-  log_info "MOR streamer extra: ${MOR_STREAMER_CONFS[*]}"
-fi
-log_info "$(log_hipen)" 
+log_info "$(log_hipen)"
 
 
 append_hudi_write_perf() {
@@ -240,8 +230,7 @@ if time "${SPARK_HOME}/bin/spark-submit" \
   --hoodie-conf hoodie.streamer.schemaprovider.target.schema.file="$SCHEMA_FILE_ARG" \
   --hoodie-conf hoodie.datasource.write.recordkey.field=col_1 \
   --hoodie-conf hoodie.datasource.write.precombine.field=col_1 \
-  --hoodie-conf hoodie.datasource.write.partitionpath.field=partition_col \
-  "${MOR_STREAMER_CONFS[@]}"
+  --hoodie-conf hoodie.datasource.write.partitionpath.field=partition_col
 then
   _wp_end=$(date +%s)
   _wp_dur=$((_wp_end - _wp_start))
