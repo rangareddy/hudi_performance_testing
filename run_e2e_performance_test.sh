@@ -8,6 +8,10 @@
 #   MERGE_ON_READ: after 5 batches, run compaction then read benchmark again (post-compaction CSV).
 #   After both phases: compare write + read performance (reports + S3).
 #
+# State (two levels, one file per phase under .e2e_state/, mirrored to S3):
+#   1) Phase:   phase_completeness=success — entire phase done; skip all its steps unless --force.
+#   2) Batch/stage: step<idx>_<job>_<batchId>_<kind>=success|failure — parquet / hudi / benchmark (and mor_* for MOR).
+#
 # Usage:
 #   bash run_e2e_performance_test.sh --table-type COPY_ON_WRITE
 #   bash run_e2e_performance_test.sh --table-type MERGE_ON_READ
@@ -272,6 +276,18 @@ run_e2e_phase() {
     aws s3 cp "$S3_STATE_FILE" "$E2E_STATE_FILE" --only-show-errors 2>&1 | tee -a "$LOG_FILE" || true
   fi
 
+  # Phase-level gate: skip the whole phase when previously completed (batch/stage keys still in file for audit).
+  if [[ "$DRY_RUN" != true ]] && [[ "$FORCE" != true ]]; then
+    local _phase_done
+    _phase_done=$(get_step_status "phase_completeness")
+    if [[ "$_phase_done" == "success" ]]; then
+      log_equal
+      log_echo "Phase ${phase_upper}: phase_completeness=success — skipping all steps for this phase (use --force to rerun)."
+      log_equal
+      return 0
+    fi
+  fi
+
   local step_num=0
   local TOTAL_BATCHES=5
   local TOTAL_BATCH_STEPS=$((TOTAL_BATCHES * 3))
@@ -365,6 +381,12 @@ run_e2e_phase() {
         --table-name-suffix "$phase" \
         --output "$BENCHMARK_POST_COMPACT_CSV"
     upload_benchmark_csv_to_s3
+  fi
+
+  # Phase-level: mark complete only after every step above succeeded (set -e would have exited otherwise).
+  if [[ "$DRY_RUN" != true ]]; then
+    set_step_status "phase_completeness" "success"
+    log_echo "Phase ${phase_upper}: phase_completeness=success (state saved)"
   fi
 }
 

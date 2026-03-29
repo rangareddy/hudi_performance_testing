@@ -139,7 +139,7 @@ Options:
 
 State and artifacts (per phase: `_baseline` / `_experiment` in filenames where noted):
 
-- Local state: `.e2e_state/state_{baseline|experiment}_<table>_<IS_LOGICAL_TIMESTAMP_ENABLED>_v<ver>.txt`
+- Local state: `.e2e_state/state_{baseline|experiment}_<table>_<IS_LOGICAL_TIMESTAMP_ENABLED>_v<ver>.txt` — **two levels**: (1) `phase_completeness=success` skips the whole phase on rerun unless `--force`; (2) `step…=success|failure` per batch stage (parquet, Hudi, benchmark, and MOR compaction/post-benchmark when applicable).
 - S3 state: `${BASE_PATH}/e2e_state/state_{baseline|experiment}_...`
 - Local log: `logs/<YYYYMMDD>/e2e_<table>_v<ver>_<IS_LOGICAL_TIMESTAMP_ENABLED>.log`
 - Read benchmarks: `reports/read/hudi_benchmark_results_<cow|mor>_<lts>_<versions>_{baseline|experiment}.csv`
