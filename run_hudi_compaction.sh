@@ -114,6 +114,8 @@ if [[ -n "${PROPS_FILE:-}" ]]; then
   PROPS_ARGS=(--props "$PROPS_FILE")
 fi
 
+ZOOKEEPER_HOST=$(hostname)
+
 log_equal
 log_info "Running HoodieCompactor (scheduleAndExecute)"
 log_hipen
@@ -141,10 +143,12 @@ if "${SPARK_HOME}/bin/spark-submit" \
   --spark-master yarn \
   --hoodie-conf hoodie.write.concurrency.mode=optimistic_concurrency_control \
   --hoodie-conf hoodie.write.lock.provider=org.apache.hudi.client.transaction.lock.ZookeeperBasedLockProvider \
-  --hoodie-conf hoodie.write.lock.zookeeper.url="localhost" \
+  --hoodie-conf hoodie.write.lock.zookeeper.url="$ZOOKEEPER_HOST" \
   --hoodie-conf hoodie.write.lock.zookeeper.port=2181 \
   --hoodie-conf hoodie.write.lock.zookeeper.base_path="/hudi/locks" \
-  --hoodie-conf hoodie.write.lock.zookeeper.lock_key="$TABLE_NAME"
+  --hoodie-conf hoodie.write.lock.zookeeper.lock_key="$TABLE_NAME" \
+  --hoodie-conf hoodie.compact.inline.max.delta.commits=1 \
+  --hoodie-conf hoodie.compaction.strategy=org.apache.hudi.table.action.compact.strategy.UnBoundedCompactionStrategy
 then
   _wp_end=$(date +%s)
   _wp_dur=$((_wp_end - _wp_start))
