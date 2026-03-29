@@ -127,6 +127,8 @@ The E2E flow runs **two phases**, each with **5 batches** (15 steps per phase: p
 1. **Baseline** — Hudi ingestion uses **`SOURCE_HUDI_VERSION` only** for batches `0–4` (batch `0` = initial, `1–4` = incremental).
 2. **Experiment** — batches `0–2` use **`SOURCE_HUDI_VERSION`**; batches `3–4` use **`TARGET_HUDI_VERSION`**.
 
+**Read benchmarks** use the Hudi Spark bundle for **one version per phase**: **baseline** → **`SOURCE_HUDI_VERSION` only**; **experiment** → **`TARGET_HUDI_VERSION` only** (each per-batch benchmark run uses that phase’s version).
+
 For **MERGE_ON_READ**, E2E still runs offline **`HoodieCompactor`** then a post-compaction read benchmark. **Hudi 0.15+ Delta Streamer requires `hoodie.compact.inline=true`**, so ingestion does not force `inline=false` (that fails in `StreamSync`). Ingestion may already compact inline, so **`HoodieCompactor` often has nothing to schedule**; **`run_hudi_compaction.sh`** then exits successfully with write-perf status **`no_pending_compaction`** unless **`HUDI_COMPACTION_ALLOW_EMPTY=false`**.
 
 After both phases, **`scripts/compare_e2e_phases.py`** writes **`reports/e2e_baseline_vs_experiment_*.csv`** with aggregated read and write times (baseline vs experiment, delta %).

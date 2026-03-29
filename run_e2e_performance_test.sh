@@ -3,7 +3,7 @@
 # End-to-end Hudi performance test (two phases, then comparison):
 #   Baseline: 5 batches — Hudi ingestion always uses SOURCE_HUDI_VERSION.
 #   Experiment: 5 batches — batches 0–2 use SOURCE_HUDI_VERSION, batches 3–4 use TARGET_HUDI_VERSION.
-#   Each batch: parquet → Hudi ingestion → read benchmark.
+#   Each batch: parquet → Hudi ingestion → read benchmark (baseline benchmarks use SOURCE_HUDI_VERSION jars only; experiment uses TARGET_HUDI_VERSION only).
 #   Baseline and experiment use separate Hudi table paths (--table-name-suffix baseline|experiment).
 #   MERGE_ON_READ: after 5 batches, run compaction then read benchmark again (post-compaction CSV).
 #   After both phases: compare write + read performance (reports + S3).
@@ -262,6 +262,13 @@ run_e2e_phase() {
   WRITE_PERF_CSV="${WRITE_REPORT_STEM}_${phase}.csv"
   export WRITE_PERF_CSV
 
+  local BENCH_HUDI_VERSIONS
+  if [[ "$phase" == "baseline" ]]; then
+    BENCH_HUDI_VERSIONS="$SOURCE_HUDI_VERSION"
+  else
+    BENCH_HUDI_VERSIONS="$TARGET_HUDI_VERSION"
+  fi
+
   log_equal
   log_info "  Phase: ${phase_upper}"
   if [[ "$phase" == "baseline" ]]; then
@@ -269,6 +276,7 @@ run_e2e_phase() {
   else
     log_info "  Hudi ingestion: SOURCE (${SOURCE_HUDI_VERSION}) for batches 0–2; TARGET (${TARGET_HUDI_VERSION}) for batches 3–4"
   fi
+  log_info "  Read benchmarks: ${BENCH_HUDI_VERSIONS} (spark-submit Hudi bundle for this phase)"
   log_equal
 
   if aws s3 ls "$S3_STATE_FILE" &>/dev/null; then
@@ -334,10 +342,10 @@ run_e2e_phase() {
       --table-name-suffix "$phase"
 
     step_num=$((step_num + 1))
-    run_step "step${step_num}_${job_type}_${BATCH_ID}_benchmark" "[${phase}] Step ${step_num}/${TOTAL_BATCH_STEPS}: Benchmark batch $BATCH_ID" \
+    run_step "step${step_num}_${job_type}_${BATCH_ID}_benchmark" "[${phase}] Step ${step_num}/${TOTAL_BATCH_STEPS}: Benchmark batch $BATCH_ID (${BENCH_HUDI_VERSIONS})" \
     python3 "${SCRIPT_DIR}/run_benchmark_suite.py" \
       --table-type "$TABLE_TYPE" \
-      --hudi-versions "$HUDI_VERSIONS" \
+      --hudi-versions "$BENCH_HUDI_VERSIONS" \
       --batch-id $BATCH_ID \
       --table-name-suffix "$phase" \
       --output "$BENCHMARK_CSV_PATH"
@@ -373,10 +381,10 @@ run_e2e_phase() {
     upload_write_perf_csv_to_s3
 
     step_num=$((step_num + 1))
-    run_step "mor_${phase}_benchmark_post_compact" "[${phase}] Step ${step_num}/${PHASE_TOTAL_STEPS}: MOR read benchmark after compaction" \
+    run_step "mor_${phase}_benchmark_post_compact" "[${phase}] Step ${step_num}/${PHASE_TOTAL_STEPS}: MOR read benchmark after compaction (${BENCH_HUDI_VERSIONS})" \
       python3 "${SCRIPT_DIR}/run_benchmark_suite.py" \
         --table-type "$TABLE_TYPE" \
-        --hudi-versions "$HUDI_VERSIONS" \
+        --hudi-versions "$BENCH_HUDI_VERSIONS" \
         --batch-id 5 \
         --table-name-suffix "$phase" \
         --output "$BENCHMARK_POST_COMPACT_CSV"
