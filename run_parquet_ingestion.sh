@@ -118,6 +118,12 @@ if [[ ! -f "$SPARK_DEFAULTS_CONF" ]]; then
   exit 1
 fi
 
+# Optional --jars: do not use "${arr[@]}" when empty — bash 3.2 + set -u treats it as unbound.
+_PARQUET_JARS_ECHO=""
+if [[ -n "${AWS_S3_JARS:-}" ]]; then
+  _PARQUET_JARS_ECHO=" --jars ${AWS_S3_JARS}"
+fi
+
 log_equal
 log_info "Starting ${INGESTION_TYPE_TITLE} ingestion job"
 log_hipen
@@ -139,26 +145,36 @@ log_info "Dataset configuration: columns=${NUM_OF_COLUMNS}, partitions=${NUM_OF_
 if [[ "$INGESTION_TYPE" == "initial" ]]; then
   _wp_start=$(date +%s)
   log_info "Executing Command:"
-  echo "${SPARK_HOME}/bin/spark-shell --master yarn --deploy-mode client --jars $AWS_S3_JARS --properties-file ${SPARK_DEFAULTS_CONF} --conf spark.sql.adaptive.enabled=true --conf spark.hadoop.mapreduce.fileoutputcommitter.algorithm.version=2 --conf spark.hadoop.fs.s3a.committer.name=directory -i $EXECUTION_SCRIPT"
-  if "${SPARK_HOME}/bin/spark-shell" \
-    --master yarn \
-    --deploy-mode client \
-    --jars $AWS_S3_JARS \
-    --properties-file "${SPARK_DEFAULTS_CONF}" \
-    --conf spark.sql.adaptive.enabled=true \
-    -i "$EXECUTION_SCRIPT"
-  then
+  echo "${SPARK_HOME}/bin/spark-shell --master ${SPARK_MASTER} --deploy-mode client${_PARQUET_JARS_ECHO} --properties-file ${SPARK_DEFAULTS_CONF} -i $EXECUTION_SCRIPT"
+  if [[ -n "${AWS_S3_JARS:-}" ]]; then
+    _parquet_shell_status=0
+    "${SPARK_HOME}/bin/spark-shell" \
+      --master "${SPARK_MASTER}" \
+      --deploy-mode client \
+      --jars "$AWS_S3_JARS" \
+      --properties-file "${SPARK_DEFAULTS_CONF}" \
+      -i "$EXECUTION_SCRIPT" || _parquet_shell_status=$?
+  else
+    _parquet_shell_status=0
+    "${SPARK_HOME}/bin/spark-shell" \
+      --master "${SPARK_MASTER}" \
+      --deploy-mode client \
+      --properties-file "${SPARK_DEFAULTS_CONF}" \
+      -i "$EXECUTION_SCRIPT" || _parquet_shell_status=$?
+  fi
+  if [[ "${_parquet_shell_status:-0}" -eq 0 ]]; then
     EXECUTION_STATUS_CODE=0
     _wp_end=$(date +%s)
     _wp_dur=$((_wp_end - _wp_start))
     log_info "Write Execution Complete. parquet_initial batch ${REQUESTED_BATCH_ID}. Total execution time: ${_wp_dur} seconds"
     append_parquet_write_perf "$_wp_dur" "ok"
   else
-    EXECUTION_STATUS_CODE=$?
+    EXECUTION_STATUS_CODE="${_parquet_shell_status}"
     _wp_end=$(date +%s)
     _wp_dur=$((_wp_end - _wp_start))
     append_parquet_write_perf "$_wp_dur" "failure"
   fi
+  unset _parquet_shell_status
 else
   export IS_REPEAT_SAME_BATCH=${IS_REPEAT_SAME_BATCH:-true}
   if [[ "$IS_REPEAT_SAME_BATCH" == true ]]; then
@@ -171,26 +187,38 @@ else
   log_info "Records to update per batch: ${NUM_OF_RECORDS_TO_UPDATE}"
   _wp_start=$(date +%s)
   log_info "Executing Command:"
-  echo "${SPARK_HOME}/bin/spark-submit --master yarn --deploy-mode client --jars $AWS_S3_JARS --properties-file ${SPARK_DEFAULTS_CONF} --conf spark.sql.adaptive.enabled=true --conf spark.hadoop.mapreduce.fileoutputcommitter.algorithm.version=2 --conf spark.hadoop.fs.s3a.committer.name=directory $EXECUTION_SCRIPT"
-  if "${SPARK_HOME}/bin/spark-submit" \
-    --master yarn \
-    --deploy-mode client \
-    --jars $AWS_S3_JARS \
-    --properties-file "${SPARK_DEFAULTS_CONF}" \
-    --conf spark.sql.adaptive.enabled=true \
-    "$EXECUTION_SCRIPT"
-  then
+  echo "${SPARK_HOME}/bin/spark-submit --master ${SPARK_MASTER} --deploy-mode client${_PARQUET_JARS_ECHO} --properties-file ${SPARK_DEFAULTS_CONF} --conf spark.sql.adaptive.enabled=true --conf spark.hadoop.mapreduce.fileoutputcommitter.algorithm.version=2 --conf spark.hadoop.fs.s3a.committer.name=directory $EXECUTION_SCRIPT"
+  if [[ -n "${AWS_S3_JARS:-}" ]]; then
+    _parquet_submit_status=0
+    "${SPARK_HOME}/bin/spark-submit" \
+      --master "${SPARK_MASTER}" \
+      --deploy-mode client \
+      --jars "$AWS_S3_JARS" \
+      --properties-file "${SPARK_DEFAULTS_CONF}" \
+      --conf spark.sql.adaptive.enabled=true \
+      "$EXECUTION_SCRIPT" || _parquet_submit_status=$?
+  else
+    _parquet_submit_status=0
+    "${SPARK_HOME}/bin/spark-submit" \
+      --master "${SPARK_MASTER}" \
+      --deploy-mode client \
+      --properties-file "${SPARK_DEFAULTS_CONF}" \
+      --conf spark.sql.adaptive.enabled=true \
+      "$EXECUTION_SCRIPT" || _parquet_submit_status=$?
+  fi
+  if [[ "${_parquet_submit_status:-0}" -eq 0 ]]; then
     EXECUTION_STATUS_CODE=0
     _wp_end=$(date +%s)
     _wp_dur=$((_wp_end - _wp_start))
     log_info "Write Execution Complete. parquet_incremental batch ${REQUESTED_BATCH_ID}. Total execution time: ${_wp_dur} seconds"
     append_parquet_write_perf "$_wp_dur" "ok"
   else
-    EXECUTION_STATUS_CODE=$?
+    EXECUTION_STATUS_CODE="${_parquet_submit_status}"
     _wp_end=$(date +%s)
     _wp_dur=$((_wp_end - _wp_start))
     append_parquet_write_perf "$_wp_dur" "failure"
   fi
+  unset _parquet_submit_status
 fi
 
 log_basic_info() {

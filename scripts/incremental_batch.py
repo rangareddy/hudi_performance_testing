@@ -14,10 +14,6 @@ import sys
 from pyspark.sql import SparkSession
 from pyspark.sql.functions import col
 
-def get_env_int(name: str, default: int) -> int:
-    """Read integer environment variable safely."""
-    return int(os.environ.get(name, str(default)))
-
 
 def create_spark(app_name: str) -> SparkSession:
     """Create Spark session."""
@@ -26,6 +22,11 @@ def create_spark(app_name: str) -> SparkSession:
         .appName(app_name)
         .getOrCreate()
     )
+
+
+def get_env_int(name: str, default: int) -> int:
+    """Read integer environment variable safely."""
+    return int(os.environ.get(name, str(default)))
 
 
 def calculate_range(batch_id: int, num_records: int):
@@ -38,7 +39,8 @@ def calculate_range(batch_id: int, num_records: int):
 
 def generate_values(start: int, end: int, batch_id: int):
     """Generate filter values."""
-    return [f"value_{i}_{batch_id}" for i in range(start, end)]
+    batch_id = 1 if batch_id == 0 else batch_id
+    return [f"value_{i}_{batch_id}" for i in range(start, end+1)]
 
 
 def run_incremental_batch(spark: SparkSession, batch_id: int):
@@ -69,8 +71,15 @@ def run_incremental_batch(spark: SparkSession, batch_id: int):
     record_count = filtered_df.count()
     print(f"✅ Filtered {record_count} records")
 
+    if record_count != num_records:
+        print(
+            f"❌ Expected exactly {num_records} records (NUM_OF_RECORDS_TO_UPDATE), "
+            f"got {record_count} (batch_id={batch_id}, col_1 range indices {start}-{end})"
+        )
+        sys.exit(1)
+
     print(f"📍 Writing to: {target_data_path}")
-    filtered_df.write.mode("append").parquet(target_data_path)
+    filtered_df.repartition(1).write.mode("append").parquet(target_data_path)
 
     print("✅ Incremental batch completed successfully")
     print(f"📍 Data written to: {target_data_path}")

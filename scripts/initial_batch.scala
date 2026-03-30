@@ -15,6 +15,7 @@ import spark.implicits._
 val batchId: Int = sys.env.get("BATCH_ID").map(_.toInt).getOrElse(0)
 val numCols = sys.env.get("NUM_OF_COLUMNS").map(_.toInt).getOrElse(500)
 val numPartitions = sys.env.get("NUM_OF_PARTITIONS").map(_.toInt).getOrElse(10000)
+
 val DEFAULT_TARGET="s3://performance-benchmark-datasets-us-west-2/hudi-bench/performance/logical_ts_perf/data/wide_500cols_10000parts"
 val outputPath = sys.env.getOrElse("TARGET_DATA", DEFAULT_TARGET)
 val enableLogicalTs: Boolean = sys.env.get("IS_LOGICAL_TIMESTAMP_ENABLED").map(_.toBoolean).getOrElse(true)

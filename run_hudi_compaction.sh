@@ -96,6 +96,8 @@ if [[ ! -f "$HUDI_SPARK_JAR" ]]; then
   exit 1
 fi
 HUDI_JARS="${HUDI_SPARK_JAR},${HUDI_UTILITIES_JAR}"
+SPARK_SUBMIT_JARS="$HUDI_JARS"
+[[ -n "${AWS_S3_JARS:-}" ]] && SPARK_SUBMIT_JARS="${SPARK_SUBMIT_JARS},${AWS_S3_JARS}"
 
 append_compaction_write_perf() {
   local duration_sec="$1"
@@ -116,6 +118,12 @@ fi
 
 ZOOKEEPER_HOST=$(hostname)
 
+_log_compact_props=""
+if [[ ${#PROPS_ARGS[@]} -gt 0 ]]; then
+  _log_compact_props="  --props \"${PROPS_FILE}\" \\
+"
+fi
+
 log_equal
 log_info "Running HoodieCompactor (scheduleAndExecute)"
 log_hipen
@@ -126,11 +134,10 @@ log_equal
 
 _wp_start=$(date +%s)
 if "${SPARK_HOME}/bin/spark-submit" \
-  --master yarn \
+  --master "${SPARK_MASTER}" \
   --deploy-mode client \
-  --jars "$HUDI_JARS,$AWS_S3_JARS" \
+  --jars "$SPARK_SUBMIT_JARS" \
   --properties-file "${SPARK_DEFAULTS_CONF}" \
-  --conf spark.sql.adaptive.enabled=true \
   --conf spark.serializer=org.apache.spark.serializer.KryoSerializer \
   --conf spark.sql.extensions=org.apache.spark.sql.hudi.HoodieSparkSessionExtension \
   --conf spark.sql.catalog.spark_catalog=org.apache.spark.sql.hudi.catalog.HoodieCatalog \
@@ -140,14 +147,15 @@ if "${SPARK_HOME}/bin/spark-submit" \
   --mode scheduleAndExecute \
   --base-path "$TABLE_BASE_PATH" \
   --table-name "$TABLE_NAME" \
-  --spark-master yarn \
+  --spark-master "${SPARK_MASTER}" \
   --hoodie-conf hoodie.write.concurrency.mode=optimistic_concurrency_control \
   --hoodie-conf hoodie.write.lock.provider=org.apache.hudi.client.transaction.lock.ZookeeperBasedLockProvider \
   --hoodie-conf hoodie.write.lock.zookeeper.url="$ZOOKEEPER_HOST" \
   --hoodie-conf hoodie.write.lock.zookeeper.port=2181 \
   --hoodie-conf hoodie.write.lock.zookeeper.base_path="/hudi/locks" \
   --hoodie-conf hoodie.write.lock.zookeeper.lock_key="$TABLE_NAME" \
-  --hoodie-conf hoodie.compact.inline.max.delta.commits=1
+  --hoodie-conf hoodie.compact.inline.max.delta.commits=1 \
+  --hoodie-conf hoodie.compaction.strategy=org.apache.hudi.table.action.compact.strategy.UnBoundedCompactionStrategy
 then
   _wp_end=$(date +%s)
   _wp_dur=$((_wp_end - _wp_start))

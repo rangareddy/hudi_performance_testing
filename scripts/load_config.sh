@@ -75,6 +75,14 @@ load_config() {
 
   export SPARK_MAJOR_VERSION=$(echo "${SPARK_VERSION}" | cut -d '.' -f 1,2)
 
+  if [[ -z "${SPARK_MASTER:-}" ]]; then
+    if [[ "${IS_LOCAL_RUN:-false}" == "true" ]]; then
+      export SPARK_MASTER="local[3]"
+    else
+      export SPARK_MASTER="yarn"
+    fi
+  fi
+
   # Derived paths (only if not already set)
   [[ -z "${JARS_PATH:-}" && -n "${BASE_PATH:-}" ]] && export JARS_PATH="${BASE_PATH}/jars"
   [[ -z "${DATA_PATH:-}" && -n "${BASE_PATH:-}" ]] && export DATA_PATH="${BASE_PATH}/data"
@@ -106,7 +114,10 @@ load_config() {
     export HADOOP_CONF_DIR=/etc/hadoop/conf
   fi
 
-  if [[ "${SKIP_SPARK_HOME_CHECK:-0}" != "1" ]]; then
+  if [[ "${IS_LOCAL_RUN:-false}" == "true" ]]; then
+    export AWS_S3_JARS=""
+    log_info "IS_LOCAL_RUN=true: AWS_S3_JARS cleared; SPARK_MASTER=${SPARK_MASTER} (override with SPARK_MASTER in common.properties)."
+  elif [[ "${SKIP_SPARK_HOME_CHECK:-0}" != "1" ]]; then
     if [[ -z "${AWS_S3_JARS:-}" ]]; then
       if [[ "${IS_USE_INSTALLED_SPARK:-false}" == "true" ]]; then
         aws_v1_bundle=$(ls /usr/share/aws/aws-java-sdk/aws-java-sdk-bundle*.jar 2>/dev/null | head -1)

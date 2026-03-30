@@ -145,6 +145,8 @@ if [ ! -f "$HUDI_SPARK_JAR" ]; then
   exit 1
 fi
 HUDI_JARS="${HUDI_SPARK_JAR},${HUDI_UTILITIES_JAR}"
+SPARK_SUBMIT_JARS="$HUDI_JARS"
+[[ -n "${AWS_S3_JARS:-}" ]] && SPARK_SUBMIT_JARS="${SPARK_SUBMIT_JARS},${AWS_S3_JARS}"
 
 log_info "$(log_equal)"
 log_info "Running Hudi Streamer"
@@ -162,11 +164,10 @@ log_info "Executing spark-submit command: "
 log_info "$(log_hipen)"
 
 log_info "spark-submit command: $SPARK_HOME/bin/spark-submit \
-  --master yarn \
+  --master ${SPARK_MASTER} \
   --deploy-mode client \
-  --jars "$HUDI_JARS,$AWS_S3_JARS" \
+  --jars "$SPARK_SUBMIT_JARS" \
   --properties-file "${SPARK_DEFAULTS_CONF}" \
-  --conf spark.sql.adaptive.enabled=true \
   --conf spark.serializer=org.apache.spark.serializer.KryoSerializer \
   --conf spark.sql.extensions=org.apache.spark.sql.hudi.HoodieSparkSessionExtension \
   --conf spark.sql.catalog.spark_catalog=org.apache.spark.sql.hudi.catalog.HoodieCatalog \
@@ -175,6 +176,7 @@ log_info "spark-submit command: $SPARK_HOME/bin/spark-submit \
   --props "$PROPS_FILE" \
   --table-type "$TABLE_TYPE" \
   --op UPSERT \
+  --disable-compaction \
   --target-base-path "$TABLE_BASE_PATH" \
   --target-table "$TABLE_NAME" \
   --source-class org.apache.hudi.utilities.sources.ParquetDFSSource \
@@ -185,8 +187,11 @@ log_info "spark-submit command: $SPARK_HOME/bin/spark-submit \
   --hoodie-conf hoodie.streamer.schemaprovider.target.schema.file="$SCHEMA_FILE_ARG" \
   --hoodie-conf hoodie.datasource.write.recordkey.field=col_1 \
   --hoodie-conf hoodie.datasource.write.precombine.field=col_1 \
-  --hoodie-conf hoodie.datasource.write.partitionpath.field=partition_col" \
-  --hoodie-conf hoodie.parquet.small.file.limit=-1
+  --hoodie-conf hoodie.datasource.write.partitionpath.field=partition_col \
+  --hoodie-conf hoodie.parquet.small.file.limit=-1 \
+  --hoodie-conf hoodie.compact.inline=false \
+  --hoodie-conf hoodie.compact.async.enabled=false"
+
 log_info "$(log_hipen)"
 
 
@@ -200,14 +205,14 @@ append_hudi_write_perf() {
     echo "$header" > "$WRITE_PERF_CSV"
   fi
   local bid="${BATCH_ID_ARG:-}"
-  echo "$(date -u +"%Y-%m-%d %H:%M:%S"),${TABLE_TYPE},hudi_delta_streamer,${bid},${TARGET_HUDI_VERSION},${duration_sec},${status},${IS_LOGICAL_TIMESTAMP_ENABLED:-true}" >> "$WRITE_PERF_CSV"
+  echo "$(date -u +"%Y-%m-%d %H:%M:%S"),${TABLE_TYPE},hudi_streamer,${bid},${TARGET_HUDI_VERSION},${duration_sec},${status},${IS_LOGICAL_TIMESTAMP_ENABLED:-true}" >> "$WRITE_PERF_CSV"
 }
 
 _wp_start=$(date +%s)
 if time "${SPARK_HOME}/bin/spark-submit" \
-  --master yarn \
+  --master "${SPARK_MASTER}" \
   --deploy-mode client \
-  --jars "$HUDI_JARS,$AWS_S3_JARS" \
+  --jars "$SPARK_SUBMIT_JARS" \
   --properties-file "${SPARK_DEFAULTS_CONF}" \
   --conf spark.sql.adaptive.enabled=true \
   --conf spark.serializer=org.apache.spark.serializer.KryoSerializer \
@@ -218,6 +223,7 @@ if time "${SPARK_HOME}/bin/spark-submit" \
   --props "$PROPS_FILE" \
   --table-type "$TABLE_TYPE" \
   --op UPSERT \
+  --disable-compaction \
   --target-base-path "$TABLE_BASE_PATH" \
   --target-table "$TABLE_NAME" \
   --source-class org.apache.hudi.utilities.sources.ParquetDFSSource \
@@ -229,11 +235,13 @@ if time "${SPARK_HOME}/bin/spark-submit" \
   --hoodie-conf hoodie.datasource.write.recordkey.field=col_1 \
   --hoodie-conf hoodie.datasource.write.precombine.field=col_1 \
   --hoodie-conf hoodie.datasource.write.partitionpath.field=partition_col \
-  --hoodie-conf hoodie.parquet.small.file.limit=-1
+  --hoodie-conf hoodie.parquet.small.file.limit=-1 \
+  --hoodie-conf hoodie.compact.inline=false \
+  --hoodie-conf hoodie.compact.async.enabled=false
 then
   _wp_end=$(date +%s)
   _wp_dur=$((_wp_end - _wp_start))
-  log_info "Write Execution Complete. hudi_delta_streamer table ${TABLE_TYPE} version ${TARGET_HUDI_VERSION}. Total execution time: ${_wp_dur} seconds"
+  log_info "Write Execution Complete. hudi_streamer table ${TABLE_TYPE} version ${TARGET_HUDI_VERSION}. Total execution time: ${_wp_dur} seconds"
   append_hudi_write_perf "$_wp_dur" "ok"
   log_success "✅ Hudi Ingestion job completed successfully in ${_wp_dur} seconds"
 else

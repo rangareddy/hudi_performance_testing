@@ -28,3 +28,10 @@ replay_pid*
 .pycache
 .DS_Store
 scripts/.DS_Store
+
+jars/
+data/
+logs/
+reports/
+benchmark_run_sequence.txt
+logical_ts_perf/

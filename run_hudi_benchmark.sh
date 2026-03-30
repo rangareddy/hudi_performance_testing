@@ -126,6 +126,9 @@ if [ ! -f "$HUDI_SPARK_BUNDLE_JAR" ]; then
   exit 1
 fi
 
+SPARK_SUBMIT_JARS="$HUDI_SPARK_BUNDLE_JAR"
+[[ -n "${AWS_S3_JARS:-}" ]] && SPARK_SUBMIT_JARS="${SPARK_SUBMIT_JARS},${AWS_S3_JARS}"
+
 log_equal
 log_info "🚀 Starting Hudi Benchmark"
 log_hipen
@@ -134,16 +137,15 @@ log_info "Table Type        : $TABLE_TYPE"
 log_info "Data Path         : $BENCH_DATA_PATH"
 log_info "Spark Home        : $SPARK_HOME"
 log_info "Script Path       : $PY_SCRIPT"
-log_info "Hudi Spark Jar    : $HUDI_SPARK_BUNDLE_JAR"
 log_equal
 
 log_info "Executing spark-submit command: "
 log_hipen
 log_info "${SPARK_HOME}"/bin/spark-submit \
-  --master yarn \
+  --master "${SPARK_MASTER}" \
   --deploy-mode client \
   --properties-file "${SPARK_DEFAULTS_CONF}" \
-  --jars "$HUDI_SPARK_BUNDLE_JAR,$AWS_S3_JARS" \
+  --jars "$SPARK_SUBMIT_JARS" \
   --conf "spark.serializer=org.apache.spark.serializer.KryoSerializer" \
   --conf "spark.sql.catalog.spark_catalog=org.apache.spark.sql.hudi.catalog.HoodieCatalog" \
   --conf "spark.sql.extensions=org.apache.spark.sql.hudi.HoodieSparkSessionExtension" \
@@ -153,10 +155,10 @@ log_info "${SPARK_HOME}"/bin/spark-submit \
 log_hipen
 
 if "${SPARK_HOME}"/bin/spark-submit \
-  --master yarn \
+  --master "${SPARK_MASTER}" \
   --deploy-mode client \
   --properties-file "${SPARK_DEFAULTS_CONF}" \
-  --jars "$HUDI_SPARK_BUNDLE_JAR,$AWS_S3_JARS" \
+  --jars "$SPARK_SUBMIT_JARS" \
   --conf "spark.serializer=org.apache.spark.serializer.KryoSerializer" \
   --conf "spark.sql.catalog.spark_catalog=org.apache.spark.sql.hudi.catalog.HoodieCatalog" \
   --conf "spark.sql.extensions=org.apache.spark.sql.hudi.HoodieSparkSessionExtension" \

@@ -170,13 +170,13 @@ set_step_status() {
   fi
   echo "${step_id}=${status}" >> "$tmp_file"
   mv "$tmp_file" "$E2E_STATE_FILE"
-  if [[ -f "$E2E_STATE_FILE" ]] && [[ "$DRY_RUN" != true ]]; then
+  if [[ -f "$E2E_STATE_FILE" ]] && [[ "$DRY_RUN" != true ]] && [[ "${IS_LOCAL_RUN:-false}" != "true" ]]; then
     aws s3 cp "$E2E_STATE_FILE" "$S3_STATE_FILE" --only-show-errors 2>&1 | tee -a "$LOG_FILE" || true
   fi
 }
 
 upload_benchmark_csv_to_s3() {
-  if [[ "$DRY_RUN" == true ]]; then
+  if [[ "$DRY_RUN" == true ]] || [[ "${IS_LOCAL_RUN:-false}" == "true" ]]; then
     return 0
   fi
   local f
@@ -189,7 +189,7 @@ upload_benchmark_csv_to_s3() {
 }
 
 upload_write_perf_csv_to_s3() {
-  if [[ "$DRY_RUN" == true ]]; then
+  if [[ "$DRY_RUN" == true ]] || [[ "${IS_LOCAL_RUN:-false}" == "true" ]]; then
     return 0
   fi
   local f
@@ -202,7 +202,7 @@ upload_write_perf_csv_to_s3() {
 }
 
 upload_comparison_csv_to_s3() {
-  if [[ "$DRY_RUN" == true ]]; then
+  if [[ "$DRY_RUN" == true ]] || [[ "${IS_LOCAL_RUN:-false}" == "true" ]]; then
     return 0
   fi
   local f
@@ -279,9 +279,11 @@ run_e2e_phase() {
   log_info "  Read benchmarks: ${BENCH_HUDI_VERSIONS} (spark-submit Hudi bundle for this phase)"
   log_equal
 
-  if aws s3 ls "$S3_STATE_FILE" &>/dev/null; then
-    echo "Downloading ${phase} state from S3: $S3_STATE_FILE"
-    aws s3 cp "$S3_STATE_FILE" "$E2E_STATE_FILE" --only-show-errors 2>&1 | tee -a "$LOG_FILE" || true
+  if [[ "${IS_LOCAL_RUN:-false}" != "true" ]]; then
+    if aws s3 ls "$S3_STATE_FILE" &>/dev/null; then
+      echo "Downloading ${phase} state from S3: $S3_STATE_FILE"
+      aws s3 cp "$S3_STATE_FILE" "$E2E_STATE_FILE" --only-show-errors 2>&1 | tee -a "$LOG_FILE" || true
+    fi
   fi
 
   # Phase-level gate: skip the whole phase when previously completed (batch/stage keys still in file for audit).
@@ -394,7 +396,7 @@ run_e2e_phase() {
   # Phase-level: mark complete only after every step above succeeded (set -e would have exited otherwise).
   if [[ "$DRY_RUN" != true ]]; then
     set_step_status "phase_completeness" "success"
-    log_echo "Phase ${phase_upper}: phase_completeness=success (state saved)"
+    log_echo "Phase ${phase_upper}: phase_completeness=success"
   fi
 }
 
@@ -431,17 +433,28 @@ if [[ "$DRY_RUN" != true ]]; then
   fi
 fi
 
-# Upload results and log to S3 (state and CSV already uploaded after each step / each benchmark)
+# Upload results and log to S3 (skipped when IS_LOCAL_RUN=true — BASE_PATH is often local, not s3://)
 if [[ "$DRY_RUN" != true ]]; then
+  if [[ "${IS_LOCAL_RUN:-false}" == "true" ]]; then
+    log_info "IS_LOCAL_RUN=true: skipping benchmark/write/comparison CSV uploads to S3"
+  fi
   upload_benchmark_csv_to_s3
   upload_write_perf_csv_to_s3
   upload_comparison_csv_to_s3
   if [[ -f "$LOG_FILE" ]]; then
-    S3_LOG_FILE="${S3_LOGS_DIR}/${LOG_RUN_ID}/$(basename "$LOG_FILE")"
-    echo "Uploading log to S3: $S3_LOG_FILE"
-    aws s3 cp "$LOG_FILE" "$S3_LOG_FILE" --only-show-errors 2>&1 | tee -a "$LOG_FILE" || true
+    if [[ "${IS_LOCAL_RUN:-false}" == "true" ]]; then
+      log_info "IS_LOCAL_RUN=true: skipping log upload to S3 (local log: $LOG_FILE)"
+    else
+      S3_LOG_FILE="${S3_LOGS_DIR}/${LOG_RUN_ID}/$(basename "$LOG_FILE")"
+      echo "Uploading log to S3: $S3_LOG_FILE"
+      aws s3 cp "$LOG_FILE" "$S3_LOG_FILE" --only-show-errors 2>&1 | tee -a "$LOG_FILE" || true
+    fi
   fi
-  echo "E2E state synced to S3 per phase after each step (baseline + experiment state files under ${BASE_PATH}/e2e_state/)"
+  if [[ "${IS_LOCAL_RUN:-false}" == "true" ]]; then
+    echo "IS_LOCAL_RUN=true: E2E state and reports kept locally under ${SCRIPT_DIR}/.e2e_state/ and ${REPORTS_DIR}/"
+  else
+    echo "E2E state synced to S3 per phase after each step (baseline + experiment state files under ${BASE_PATH}/e2e_state/)"
+  fi
 fi
 
 log_info "$(log_equal)"
