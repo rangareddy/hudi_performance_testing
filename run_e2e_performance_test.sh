@@ -451,6 +451,16 @@ if [[ "$TABLE_TYPE" == "MERGE_ON_READ" ]]; then
   echo "Read (post-compact): ${BENCHMARK_REPORT_STEM}_{baseline,experiment}_post_compact.csv"
 fi
 echo "Write performance: ${WRITE_REPORT_STEM}_{baseline,experiment}.csv"
-echo "Comparison report: $COMPARISON_CSV"
+# compare_e2e_phases.py appends _<baseline_hudi>_vs_<experiment_hudi> before .csv
+shopt -s nullglob
+_cmp_written=("${REPORTS_DIR}"/e2e_baseline_vs_experiment*.csv)
+if ((${#_cmp_written[@]})); then
+  for _cf in "${_cmp_written[@]}"; do
+    echo "Comparison report: ${_cf}"
+  done
+else
+  echo "Comparison report: (expected under ${REPORTS_DIR}/e2e_baseline_vs_experiment*_vs_*.csv)"
+fi
+shopt -u nullglob
 echo "Log file         : $LOG_FILE"
 log_info "$(log_equal)"

@@ -3,13 +3,14 @@
 Aggregate read/write CSVs from baseline vs experiment E2E phases.
 
 Writes:
-  1) Summary CSV: rolled-up metrics (--output, or auto per stem with --report-dir / --report-root).
-  2) Per-batch Markdown + CSV tables: write (hudi_delta_streamer only) and read
-     (execution_time_seconds), with diff (s) and % difference. Lower time is better.
+  1) Summary CSV: rolled-up metrics; first columns table_type, is_logical_timestamp (true/false
+     from filename stem), then metric columns. Bundle mode merges all COW/MOR stems.
+  2) Per-batch detail CSV: first columns table_type, is_logical_timestamp; batch_size/count holds
+     batch size (write) or count (read) with no slash in the cell. Hudi versions are in filenames.
+     Lower time is better.
 
 Report layout:
-  --report-dir BUNDLE   expects BUNDLE/read/ and BUNDLE/write/ (hudi_benchmark_results_*,
-                        hudi_write_performance_*).
+  --report-dir BUNDLE   expects BUNDLE/read/ and BUNDLE/write/.
   --report-root ROOT    processes each immediate subdirectory that has read/ and write/.
 """
 from __future__ import annotations
@@ -24,6 +25,8 @@ from typing import Dict, List, Optional, Tuple
 READ_CSV_PREFIX = "hudi_benchmark_results_"
 READ_CSV_BASELINE_SUFFIX = "_baseline.csv"
 WRITE_CSV_PREFIX = "hudi_write_performance_"
+# CSV header uses slash; DictWriter accepts this as the field name.
+COL_BATCH_SIZE_SLASH_COUNT = "batch_size/count"
 
 
 def discover_read_stems(read_dir: Path) -> List[str]:
@@ -55,6 +58,58 @@ def iter_report_bundles(report_root: Path) -> List[Tuple[Path, Path, Path]]:
         if rd.is_dir() and wd.is_dir():
             out.append((child, rd, wd))
     return out
+
+
+def hudi_version_from_csv(path: Path) -> str:
+    """First hudi_version from an ok row in a benchmark or write CSV."""
+    if not path.is_file():
+        return ""
+    with open(path, newline="") as f:
+        r = csv.DictReader(f)
+        for row in r:
+            if (row.get("status") or "").strip() != "ok":
+                continue
+            v = (row.get("hudi_version") or "").strip()
+            if v:
+                return v
+    return ""
+
+
+def version_tag_for_filenames(baseline_read: Path, experiment_read: Path) -> str:
+    """Safe token for filenames, e.g. 0_15_0_vs_0_16_0 from baseline vs experiment versions."""
+
+    def tok(s: str) -> str:
+        t = (s or "").strip() or "unknown"
+        for c in '\\/:*?"<>|':
+            t = t.replace(c, "_")
+        return t.replace(" ", "_")
+
+    return f"{tok(hudi_version_from_csv(baseline_read))}_vs_{tok(hudi_version_from_csv(experiment_read))}"
+
+
+def config_stem_from_read_baseline(path: Path) -> str:
+    """Parse stem from hudi_benchmark_results_<stem>_baseline.csv."""
+    name = path.name
+    if name.startswith(READ_CSV_PREFIX) and name.endswith(READ_CSV_BASELINE_SUFFIX):
+        return name[len(READ_CSV_PREFIX) : -len(READ_CSV_BASELINE_SUFFIX)]
+    return ""
+
+
+def effective_config_stem(explicit_stem: str, baseline_read: Path) -> str:
+    return explicit_stem if explicit_stem.strip() else config_stem_from_read_baseline(baseline_read)
+
+
+def is_logical_timestamp_from_stem(config_stem: str) -> str:
+    """Stem token after table kind: false → false, true → true (matches IS_LOGICAL_TIMESTAMP_ENABLED)."""
+    if not config_stem:
+        return ""
+    parts = config_stem.split("_")
+    if len(parts) >= 2:
+        if parts[1] == "false":
+            return "false"
+        if parts[1] == "true":
+            return "true"
+    return ""
 
 
 def _float_or_zero(val: str) -> float:
@@ -182,20 +237,6 @@ def load_read_by_batch(path: Path) -> Dict[int, Tuple[float, int]]:
     return {k: (v[1], v[2]) for k, v in best.items()}
 
 
-def hudi_version_label(path: Path) -> str:
-    if not path.is_file():
-        return "unknown"
-    with open(path, newline="") as f:
-        r = csv.DictReader(f)
-        for row in r:
-            if (row.get("status") or "").strip() != "ok":
-                continue
-            v = (row.get("hudi_version") or "").strip()
-            if v:
-                return v
-    return "unknown"
-
-
 def table_type_from_read_csv(path: Path) -> str:
     if not path.is_file():
         return "COPY_ON_WRITE"
@@ -214,35 +255,23 @@ def fmt_time(v: float, as_int_if_whole: bool = False) -> str:
     return f"{v:.2f}"
 
 
-def md_bold_lower_better(baseline: float, experiment: float, use_baseline_col: bool) -> str:
-    """Lower seconds is better; bold the winning cell."""
-    if baseline <= 0 and experiment <= 0:
-        return "-"
-    b_win = baseline < experiment
-    e_win = experiment < baseline
-    if use_baseline_col:
-        val = fmt_time(baseline, as_int_if_whole=True)
-        return f"**{val}**" if b_win and not e_win else val
-    val = fmt_time(experiment, as_int_if_whole=True)
-    return f"**{val}**" if e_win and not b_win else val
+SECTION_WRITE_BENCHMARK = "write benchmark"
+SECTION_READ_BENCHMARK = "read_benchmark"
+SECTION_READ_POST_COMPACT = "read_benchmark_post_compaction"
 
 
-def write_per_batch_tables(
+def build_per_batch_detail(
     baseline_write: Path,
     experiment_write: Path,
     baseline_read: Path,
     experiment_read: Path,
     initial_batch_size: int,
     incremental_batch_size: int,
-    md_path: Path,
-    csv_detail_path: Path,
     baseline_read_post: Optional[Path],
     experiment_read_post: Optional[Path],
-) -> None:
+) -> List[Dict[str, str]]:
     tt = table_type_from_read_csv(baseline_read)
     tt_short = short_table_type(tt)
-    bv = hudi_version_label(baseline_read)
-    ev = hudi_version_label(experiment_read)
 
     w_base = load_hudi_delta_streamer_by_batch(baseline_write)
     w_exp = load_hudi_delta_streamer_by_batch(experiment_write)
@@ -250,23 +279,13 @@ def write_per_batch_tables(
     r_exp = load_read_by_batch(experiment_read)
 
     batch_ids = [0, 1, 2, 3, 4]
-    write_csv_rows: List[Dict[str, str]] = []
-    read_csv_rows: List[Dict[str, str]] = []
-
-    md_lines: List[str] = [
-        "# Hudi performance: baseline vs experiment",
-        "",
-        f"**Table type:** {tt_short} ({tt})",
-        "",
-        "## Hudi write performance (Delta Streamer / `hudi_delta_streamer` only)",
-        "",
-        f"| Table Type | Batch Info | Batch Size | Baseline ({bv}) | Experiment ({ev}) | Diff (s) | Diff (%) |",
-        "|------------|------------|------------|-----------------|-------------------|----------|----------|",
-    ]
+    detail_rows: List[Dict[str, str]] = []
 
     for bid in batch_ids:
         bsz = batch_size_for(bid, initial_batch_size, incremental_batch_size)
         bl = batch_label(bid)
+        # batch_size/count: write rows show batch_size only (no slash in value).
+        size_count_write = str(bsz)
         hb = bid in w_base
         he = bid in w_exp
         wb = w_base[bid] if hb else float("nan")
@@ -274,41 +293,25 @@ def write_per_batch_tables(
         if not hb or not he:
             diff_s = ""
             diff_p = ""
-            bcell = "-" if not hb else fmt_time(wb, as_int_if_whole=True)
-            ecell = "-" if not he else fmt_time(we, as_int_if_whole=True)
-            bdisp = bcell
-            edisp = ecell
+            bdisp = "-" if not hb else fmt_time(wb, as_int_if_whole=True)
+            edisp = "-" if not he else fmt_time(we, as_int_if_whole=True)
         else:
             diff_s = f"{we - wb:.2f}"
             diff_p = pct_delta(wb, we)
-            bcell = md_bold_lower_better(wb, we, True)
-            ecell = md_bold_lower_better(wb, we, False)
             bdisp = fmt_time(wb, as_int_if_whole=True)
             edisp = fmt_time(we, as_int_if_whole=True)
-        md_lines.append(
-            f"| {tt_short} | {bl} | {bsz} | {bcell} | {ecell} | {diff_s or '-'} | {diff_p or '-'} |"
-        )
-        write_csv_rows.append(
+        detail_rows.append(
             {
+                "section": SECTION_WRITE_BENCHMARK,
                 "table_type": tt_short,
                 "batch_info": bl,
-                "batch_size": str(bsz),
-                "baseline_seconds": bdisp.replace("**", ""),
-                "experiment_seconds": edisp.replace("**", ""),
+                COL_BATCH_SIZE_SLASH_COUNT: size_count_write,
+                "baseline_seconds": bdisp,
+                "experiment_seconds": edisp,
                 "diff_seconds": diff_s,
                 "diff_percent": diff_p,
             }
         )
-
-    md_lines.extend(
-        [
-            "",
-            "## Hudi read performance (`execution_time_seconds`)",
-            "",
-            f"| Table Type | Batch Info | Baseline ({bv}) | Experiment ({ev}) | Count | Diff (s) | Diff (%) |",
-            "|------------|------------|-----------------|-------------------|-------|----------|----------|",
-        ]
-    )
 
     for bid in batch_ids:
         bl = batch_label(bid)
@@ -317,30 +320,26 @@ def write_per_batch_tables(
         wb, cb = r_base[bid] if hb else (float("nan"), 0)
         we, ce = r_exp[bid] if he else (float("nan"), 0)
         cnt = (ce or cb) if (hb or he) else 0
+        # Read rows: benchmark count only.
+        size_count_read = str(cnt)
         if not hb or not he:
             diff_s = ""
             diff_p = ""
-            bcell = "-" if not hb else fmt_time(wb)
-            ecell = "-" if not he else fmt_time(we)
-            bdisp = bcell
-            edisp = ecell
+            bdisp = "-" if not hb else fmt_time(wb)
+            edisp = "-" if not he else fmt_time(we)
         else:
             diff_s = f"{we - wb:.2f}"
             diff_p = pct_delta(wb, we)
-            bcell = md_bold_lower_better(wb, we, True)
-            ecell = md_bold_lower_better(wb, we, False)
             bdisp = fmt_time(wb)
             edisp = fmt_time(we)
-        md_lines.append(
-            f"| {tt_short} | {bl} | {bcell} | {ecell} | {cnt} | {diff_s or '-'} | {diff_p or '-'} |"
-        )
-        read_csv_rows.append(
+        detail_rows.append(
             {
+                "section": SECTION_READ_BENCHMARK,
                 "table_type": tt_short,
                 "batch_info": bl,
-                "baseline_seconds": bdisp.replace("**", ""),
-                "experiment_seconds": edisp.replace("**", ""),
-                "count": str(cnt),
+                COL_BATCH_SIZE_SLASH_COUNT: size_count_read,
+                "baseline_seconds": bdisp,
+                "experiment_seconds": edisp,
                 "diff_seconds": diff_s,
                 "diff_percent": diff_p,
             }
@@ -356,14 +355,6 @@ def write_per_batch_tables(
         rpb = load_read_by_batch(baseline_read_post)
         rpe = load_read_by_batch(experiment_read_post)
         post_ids = sorted(set(rpb.keys()) | set(rpe.keys()))
-        if post_ids:
-            md_lines.extend(["", "## Hudi read performance (post-compaction)", ""])
-            md_lines.append(
-                f"| Table Type | Batch Info | Baseline ({bv}) | Experiment ({ev}) | Count | Diff (s) | Diff (%) |"
-            )
-            md_lines.append(
-                "|------------|------------|-----------------|-------------------|-------|----------|----------|"
-            )
         for bid in post_ids:
             label = f"Post-compaction (batch_id {bid})" if bid != 5 else "Post-compaction read"
             hb = bid in rpb
@@ -374,118 +365,92 @@ def write_per_batch_tables(
             if not hb or not he:
                 diff_s = ""
                 diff_p = ""
-                bcell = "-" if not hb else fmt_time(wb)
-                ecell = "-" if not he else fmt_time(we)
-                bdisp = bcell
-                edisp = ecell
+                bdisp = "-" if not hb else fmt_time(wb)
+                edisp = "-" if not he else fmt_time(we)
             else:
                 diff_s = f"{we - wb:.2f}"
                 diff_p = pct_delta(wb, we)
-                bcell = md_bold_lower_better(wb, we, True)
-                ecell = md_bold_lower_better(wb, we, False)
                 bdisp = fmt_time(wb)
                 edisp = fmt_time(we)
-            md_lines.append(
-                f"| {tt_short} | {label} | {bcell} | {ecell} | {cnt} | {diff_s or '-'} | {diff_p or '-'} |"
-            )
-            read_csv_rows.append(
+            detail_rows.append(
                 {
+                    "section": SECTION_READ_POST_COMPACT,
                     "table_type": tt_short,
                     "batch_info": label,
-                    "baseline_seconds": bdisp.replace("**", ""),
-                    "experiment_seconds": edisp.replace("**", ""),
-                    "count": str(cnt),
+                    COL_BATCH_SIZE_SLASH_COUNT: str(cnt),
+                    "baseline_seconds": bdisp,
+                    "experiment_seconds": edisp,
                     "diff_seconds": diff_s,
                     "diff_percent": diff_p,
                 }
             )
 
-    md_path.parent.mkdir(parents=True, exist_ok=True)
-    md_path.write_text("\n".join(md_lines) + "\n", encoding="utf-8")
+    return detail_rows
 
-    csv_detail_path.parent.mkdir(parents=True, exist_ok=True)
-    with open(csv_detail_path, "w", newline="") as f:
-        w = csv.DictWriter(
-            f,
-            fieldnames=[
-                "section",
-                "table_type",
-                "batch_info",
-                "batch_size",
-                "baseline_seconds",
-                "experiment_seconds",
-                "count",
-                "diff_seconds",
-                "diff_percent",
-            ],
+
+DETAIL_CSV_FIELDNAMES = [
+    "table_type",
+    "is_logical_timestamp",
+    "section",
+    "batch_info",
+    COL_BATCH_SIZE_SLASH_COUNT,
+    "baseline_seconds",
+    "experiment_seconds",
+    "diff_seconds",
+    "diff_percent",
+]
+
+SUMMARY_CSV_FIELDNAMES = [
+    "table_type",
+    "is_logical_timestamp",
+    "metric",
+    "baseline_value",
+    "experiment_value",
+    "delta_seconds",
+    "delta_percent",
+    "baseline_row_count_ok",
+    "experiment_row_count_ok",
+]
+
+
+def detail_csv_rows_with_logical_ts_flag(
+    config_stem: str, detail_rows: List[Dict[str, str]]
+) -> List[Dict[str, str]]:
+    lts = is_logical_timestamp_from_stem(config_stem)
+    out: List[Dict[str, str]] = []
+    for r in detail_rows:
+        out.append(
+            {
+                "table_type": r["table_type"],
+                "is_logical_timestamp": lts,
+                "section": r["section"],
+                "batch_info": r["batch_info"],
+                COL_BATCH_SIZE_SLASH_COUNT: r[COL_BATCH_SIZE_SLASH_COUNT],
+                "baseline_seconds": r["baseline_seconds"],
+                "experiment_seconds": r["experiment_seconds"],
+                "diff_seconds": r["diff_seconds"],
+                "diff_percent": r["diff_percent"],
+            }
         )
+    return out
+
+
+def write_detail_csv(path: Path, rows: List[Dict[str, str]]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with open(path, "w", newline="") as f:
+        w = csv.DictWriter(f, fieldnames=DETAIL_CSV_FIELDNAMES)
         w.writeheader()
-        for row in write_csv_rows:
-            w.writerow(
-                {
-                    "section": "write_hudi_delta_streamer",
-                    "table_type": row["table_type"],
-                    "batch_info": row["batch_info"],
-                    "batch_size": row["batch_size"],
-                    "baseline_seconds": row["baseline_seconds"],
-                    "experiment_seconds": row["experiment_seconds"],
-                    "count": "",
-                    "diff_seconds": row["diff_seconds"],
-                    "diff_percent": row["diff_percent"],
-                }
-            )
-        for row in read_csv_rows:
-            w.writerow(
-                {
-                    "section": "read_benchmark",
-                    "table_type": row["table_type"],
-                    "batch_info": row["batch_info"],
-                    "batch_size": "",
-                    "baseline_seconds": row["baseline_seconds"],
-                    "experiment_seconds": row["experiment_seconds"],
-                    "count": row["count"],
-                    "diff_seconds": row["diff_seconds"],
-                    "diff_percent": row["diff_percent"],
-                }
-            )
-
-    print(f"Per-batch Markdown report: {md_path}")
-    print(f"Per-batch detail CSV:      {csv_detail_path}")
+        w.writerows(rows)
 
 
-def run_one_comparison(
+def build_summary_rows(
     baseline_read: Path,
     experiment_read: Path,
     baseline_write: Path,
     experiment_write: Path,
-    output: Path,
     baseline_read_post: Optional[Path],
     experiment_read_post: Optional[Path],
-    initial_batch_size: int,
-    incremental_batch_size: int,
-    tables_md: Optional[Path],
-    tables_csv: Optional[Path],
-) -> None:
-    md_path = tables_md
-    if md_path is None:
-        md_path = output.parent / f"{output.stem}_per_batch_tables.md"
-    csv_detail = tables_csv
-    if csv_detail is None:
-        csv_detail = output.parent / f"{output.stem}_per_batch_tables.csv"
-
-    write_per_batch_tables(
-        baseline_write,
-        experiment_write,
-        baseline_read,
-        experiment_read,
-        initial_batch_size,
-        incremental_batch_size,
-        md_path,
-        csv_detail,
-        baseline_read_post,
-        experiment_read_post,
-    )
-
+) -> List[Dict[str, str]]:
     rows: List[Dict[str, str]] = []
 
     br, br_n = sum_read_seconds(baseline_read)
@@ -579,21 +544,62 @@ def run_one_comparison(
                 file=sys.stderr,
             )
 
+    return rows
+
+
+def run_one_comparison(
+    baseline_read: Path,
+    experiment_read: Path,
+    baseline_write: Path,
+    experiment_write: Path,
+    output: Path,
+    baseline_read_post: Optional[Path],
+    experiment_read_post: Optional[Path],
+    initial_batch_size: int,
+    incremental_batch_size: int,
+    tables_csv: Optional[Path],
+    config_stem: str = "",
+) -> None:
+    stem_eff = effective_config_stem(config_stem, baseline_read)
+    ver_tag = version_tag_for_filenames(baseline_read, experiment_read)
+    output = output.parent / f"{output.stem}_{ver_tag}{output.suffix}"
+
+    detail_core = build_per_batch_detail(
+        baseline_write,
+        experiment_write,
+        baseline_read,
+        experiment_read,
+        initial_batch_size,
+        incremental_batch_size,
+        baseline_read_post,
+        experiment_read_post,
+    )
+    csv_detail = tables_csv
+    if csv_detail is None:
+        csv_detail = output.parent / f"{output.stem}_per_batch_tables.csv"
+    write_detail_csv(csv_detail, detail_csv_rows_with_logical_ts_flag(stem_eff, detail_core))
+
+    rows = build_summary_rows(
+        baseline_read,
+        experiment_read,
+        baseline_write,
+        experiment_write,
+        baseline_read_post,
+        experiment_read_post,
+    )
+    tt_short = short_table_type(table_type_from_read_csv(baseline_read))
+    lts = is_logical_timestamp_from_stem(stem_eff)
+    for r in rows:
+        r["table_type"] = tt_short
+        r["is_logical_timestamp"] = lts
+
     output.parent.mkdir(parents=True, exist_ok=True)
-    fieldnames = [
-        "metric",
-        "baseline_value",
-        "experiment_value",
-        "delta_seconds",
-        "delta_percent",
-        "baseline_row_count_ok",
-        "experiment_row_count_ok",
-    ]
     with open(output, "w", newline="") as f:
-        w = csv.DictWriter(f, fieldnames=fieldnames)
+        w = csv.DictWriter(f, fieldnames=SUMMARY_CSV_FIELDNAMES)
         w.writeheader()
         w.writerows(rows)
 
+    print(f"Per-batch detail CSV:      {csv_detail}")
     print(f"Comparison summary CSV: {output}")
 
 
@@ -608,7 +614,10 @@ def process_report_bundle(
     if not stems:
         print(f"No {READ_CSV_PREFIX}*{READ_CSV_BASELINE_SUFFIX} in {read_dir}", file=sys.stderr)
         return 1
+    combined_summary: List[Dict[str, str]] = []
+    combined_detail: List[Dict[str, str]] = []
     ok = 0
+    version_tag = ""
     for stem in stems:
         baseline_read = read_dir / f"{READ_CSV_PREFIX}{stem}{READ_CSV_BASELINE_SUFFIX}"
         experiment_read = read_dir / f"{READ_CSV_PREFIX}{stem}_experiment.csv"
@@ -624,28 +633,51 @@ def process_report_bundle(
                 file=sys.stderr,
             )
             continue
-        out = bundle_dir / f"e2e_baseline_vs_experiment_{stem}.csv"
         post_b = read_dir / f"{READ_CSV_PREFIX}{stem}_baseline_post_compact.csv"
         post_e = read_dir / f"{READ_CSV_PREFIX}{stem}_experiment_post_compact.csv"
         br_post = post_b if post_b.is_file() else None
         er_post = post_e if post_e.is_file() else None
         print(f"--- {bundle_dir.name}: {stem} ---")
-        run_one_comparison(
+        if not version_tag:
+            version_tag = version_tag_for_filenames(baseline_read, experiment_read)
+        detail_core = build_per_batch_detail(
+            baseline_write,
+            experiment_write,
+            baseline_read,
+            experiment_read,
+            initial_batch_size,
+            incremental_batch_size,
+            br_post,
+            er_post,
+        )
+        combined_detail.extend(detail_csv_rows_with_logical_ts_flag(stem, detail_core))
+        summ = build_summary_rows(
             baseline_read,
             experiment_read,
             baseline_write,
             experiment_write,
-            out,
             br_post,
             er_post,
-            initial_batch_size,
-            incremental_batch_size,
-            None,
-            None,
         )
+        tt_short = short_table_type(table_type_from_read_csv(baseline_read))
+        lts = is_logical_timestamp_from_stem(stem)
+        for r in summ:
+            combined_summary.append(
+                {**r, "table_type": tt_short, "is_logical_timestamp": lts}
+            )
         ok += 1
     if ok == 0:
         return 1
+    summary_out = bundle_dir / f"e2e_baseline_vs_experiment_{version_tag}.csv"
+    detail_out = bundle_dir / f"e2e_baseline_vs_experiment_{version_tag}_per_batch_tables.csv"
+    summary_out.parent.mkdir(parents=True, exist_ok=True)
+    with open(summary_out, "w", newline="") as f:
+        w = csv.DictWriter(f, fieldnames=SUMMARY_CSV_FIELDNAMES)
+        w.writeheader()
+        w.writerows(combined_summary)
+    write_detail_csv(detail_out, combined_detail)
+    print(f"Comparison summary CSV (all stems): {summary_out}")
+    print(f"Per-batch detail CSV (all stems):   {detail_out}")
     return 0
 
 
@@ -660,7 +692,7 @@ def main() -> int:
         "--report-dir",
         type=Path,
         default=None,
-        help="Directory with read/ and write/ subfolders; writes e2e_baseline_vs_experiment_<stem>.* per pair.",
+        help="Directory with read/ and write/; writes e2e_baseline_vs_experiment_<hudi_ver>_vs_<hudi_ver>.csv (all stems) plus matching per_batch_tables CSV.",
     )
     p.add_argument(
         "--report-root",
@@ -693,16 +725,10 @@ def main() -> int:
         help="Batch size label for batch_id 1–4 (write table). Default: env NUM_OF_RECORDS_TO_UPDATE or 100.",
     )
     p.add_argument(
-        "--tables-md",
-        type=Path,
-        default=None,
-        help="Markdown per-batch tables (default: next to --output with _per_batch_tables.md).",
-    )
-    p.add_argument(
         "--tables-csv",
         type=Path,
         default=None,
-        help="CSV per-batch rows (default: next to --output with _per_batch_tables.csv).",
+        help="Per-batch detail CSV (default: next to --output with _per_batch_tables.csv).",
     )
     args = p.parse_args()
 
@@ -754,8 +780,8 @@ def main() -> int:
         args.experiment_read_post,
         args.initial_batch_size,
         args.incremental_batch_size,
-        args.tables_md,
         args.tables_csv,
+        "",
     )
     return 0
 
