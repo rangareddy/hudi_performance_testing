@@ -36,11 +36,28 @@ tmux
 # tmux attach (reconnect)
 ```
 
-Run once on the cluster node:
+To begin your performance testing, you can obtain the source code either via GitHub or directly from the S3 benchmark bucket.
+
+**Option 1: Using Git (Recommended)**
+
+Clone the repository directly from GitHub to ensure you have the latest version:
 
 ```sh
+git clone https://github.com/rangareddy/hudi_performace_testing.git
+cd hudi_performace_testing
+```
+
+**Option 2: Using AWS CLI**
+
+If you are working directly on an EMR cluster or an EC2 instance, you can pull the source code from S3:
+
+```sh
+# Copy the source code to your local directory
 aws s3 cp s3://performance-benchmark-datasets-us-west-2/hudi-bench/performance/logical_ts_perf/source_code/ . --recursive
-unzip hudi_performace_testing.zip && cd hudi_performace_testing
+
+# Extract and enter the project directory
+unzip hudi_performace_testing.zip
+cd hudi_performace_testing
 ```
 
 Before running `setup_node.sh`, update the `scripts/common.properties` file according to your requirements. For example, update the `SOURCE_HUDI_VERSION` and `TARGET_HUDI_VERSION`.
