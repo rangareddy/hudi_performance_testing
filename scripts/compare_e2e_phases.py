@@ -25,6 +25,8 @@ from typing import Dict, List, Optional, Tuple
 READ_CSV_PREFIX = "hudi_benchmark_results_"
 READ_CSV_BASELINE_SUFFIX = "_baseline.csv"
 WRITE_CSV_PREFIX = "hudi_write_performance_"
+# run_hudi_ingestion.sh logs operation "hudi_streamer"; older runs used "hudi_delta_streamer"
+STREAMER_WRITE_OPERATIONS: Tuple[str, ...] = ("hudi_delta_streamer", "hudi_streamer")
 # CSV header uses slash; DictWriter accepts this as the field name.
 COL_BATCH_SIZE_SLASH_COUNT = "batch_size/count"
 
@@ -149,8 +151,17 @@ def sum_read_seconds(path: Path) -> Tuple[float, int]:
     return total, n
 
 
-def sum_write_seconds(path: Path, operation_filter: Optional[str] = None) -> Tuple[float, int]:
-    """Sum execution_time_seconds for rows with status ok; optional operation substring filter."""
+def sum_write_seconds(
+    path: Path,
+    operation_filter: Optional[str] = None,
+    *,
+    matching_operations: Optional[Tuple[str, ...]] = None,
+) -> Tuple[float, int]:
+    """Sum execution_time_seconds for rows with status ok.
+
+    If matching_operations is set, operation must equal one of those strings (exact).
+    Else if operation_filter is set, operation must contain that substring.
+    """
     if not path.is_file():
         return 0.0, 0
     total = 0.0
@@ -161,7 +172,10 @@ def sum_write_seconds(path: Path, operation_filter: Optional[str] = None) -> Tup
             if (row.get("status") or "").strip() != "ok":
                 continue
             op = (row.get("operation") or "").strip()
-            if operation_filter and operation_filter not in op:
+            if matching_operations is not None:
+                if op not in matching_operations:
+                    continue
+            elif operation_filter and operation_filter not in op:
                 continue
             sec = _float_or_zero(row.get("execution_time_seconds", ""))
             total += sec
@@ -203,7 +217,7 @@ def batch_size_for(batch_id: int, initial_size: int, incremental_size: int) -> i
 
 
 def load_hudi_delta_streamer_by_batch(path: Path) -> Dict[int, float]:
-    """Write perf: only operation == hudi_delta_streamer, status ok; batch_id -> seconds."""
+    """Write perf: HoodieStreamer rows (hudi_streamer or hudi_delta_streamer), status ok; batch_id -> seconds."""
     out: Dict[int, float] = {}
     if not path.is_file():
         return out
@@ -211,7 +225,8 @@ def load_hudi_delta_streamer_by_batch(path: Path) -> Dict[int, float]:
         for row in csv.DictReader(f):
             if (row.get("status") or "").strip() != "ok":
                 continue
-            if (row.get("operation") or "").strip() != "hudi_delta_streamer":
+            op = (row.get("operation") or "").strip()
+            if op not in STREAMER_WRITE_OPERATIONS:
                 continue
             bid = _int_or_zero(row.get("batch_id", ""))
             out[bid] = _float_or_zero(row.get("execution_time_seconds", ""))
@@ -495,8 +510,12 @@ def build_summary_rows(
         }
     )
 
-    bh, _ = sum_write_seconds(baseline_write, "hudi_delta_streamer")
-    eh, _ = sum_write_seconds(experiment_write, "hudi_delta_streamer")
+    bh, _ = sum_write_seconds(
+        baseline_write, matching_operations=STREAMER_WRITE_OPERATIONS
+    )
+    eh, _ = sum_write_seconds(
+        experiment_write, matching_operations=STREAMER_WRITE_OPERATIONS
+    )
     rows.append(
         {
             "metric": "write_hudi_delta_streamer_seconds",
