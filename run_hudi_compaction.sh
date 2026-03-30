@@ -125,11 +125,7 @@ log_info "TABLE_BASE_PATH : $TABLE_BASE_PATH"
 log_equal
 
 _wp_start=$(date +%s)
-_COMPACT_LOG=$(mktemp)
-trap 'rm -f "$_COMPACT_LOG"' EXIT
-
-set +e
-"${SPARK_HOME}/bin/spark-submit" \
+if "${SPARK_HOME}/bin/spark-submit" \
   --master yarn \
   --deploy-mode client \
   --jars "$HUDI_JARS,$AWS_S3_JARS" \
@@ -151,24 +147,18 @@ set +e
   --hoodie-conf hoodie.write.lock.zookeeper.port=2181 \
   --hoodie-conf hoodie.write.lock.zookeeper.base_path="/hudi/locks" \
   --hoodie-conf hoodie.write.lock.zookeeper.lock_key="$TABLE_NAME" \
-  2>&1 | tee "$_COMPACT_LOG"
-_compact_rc=${PIPESTATUS[0]}
-set -e
-
-_wp_end=$(date +%s)
-_wp_dur=$((_wp_end - _wp_start))
-
-if [[ "$_compact_rc" -eq 0 ]]; then
+  --hoodie-conf hoodie.compact.inline.max.delta.commits=1
+then
+  _wp_end=$(date +%s)
+  _wp_dur=$((_wp_end - _wp_start))
   log_info "Compaction finished. Total wall time: ${_wp_dur} seconds"
   append_compaction_write_perf "$_wp_dur" "ok"
   log_success "✅ HoodieCompactor completed successfully in ${_wp_dur} seconds"
-elif [[ "${HUDI_COMPACTION_ALLOW_EMPTY:-true}" == "true" ]] && grep -E -q "Couldn't do schedule|No operations are retrieved|Total of 0 compaction operations" "$_COMPACT_LOG"; then
-  log_warn "HoodieCompactor had nothing to compact (no MOR delta logs yet, empty path, or already compacted). Set HUDI_COMPACTION_ALLOW_EMPTY=false to fail hard."
-  append_compaction_write_perf "$_wp_dur" "no_pending_compaction"
-  log_success "✅ HoodieCompactor finished with no pending compaction (${_wp_dur}s)"
 else
+  _wp_end=$(date +%s)
+  _wp_dur=$((_wp_end - _wp_start))
   append_compaction_write_perf "$_wp_dur" "failure"
-  log_error "❌ HoodieCompactor failed after ${_wp_dur} seconds (exit ${_compact_rc})"
+  log_error "❌ HoodieCompactor failed after ${_wp_dur} seconds"
   exit 1
 fi
 log_hipen

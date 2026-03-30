@@ -444,7 +444,7 @@ if [[ "$DRY_RUN" != true ]]; then
   echo "E2E state synced to S3 per phase after each step (baseline + experiment state files under ${BASE_PATH}/e2e_state/)"
 fi
 
-log_equal
+log_info "$(log_equal)"
 echo "E2E performance test completed"
 echo "Read benchmarks:  ${BENCHMARK_REPORT_STEM}_{baseline,experiment}.csv"
 if [[ "$TABLE_TYPE" == "MERGE_ON_READ" ]]; then
@@ -453,4 +453,4 @@ fi
 echo "Write performance: ${WRITE_REPORT_STEM}_{baseline,experiment}.csv"
 echo "Comparison report: $COMPARISON_CSV"
 echo "Log file         : $LOG_FILE"
-log_equal
+log_info "$(log_equal)"

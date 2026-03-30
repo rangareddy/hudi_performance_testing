@@ -128,7 +128,6 @@ if [[ -n "$TABLE_NAME_SUFFIX_ARG" ]]; then
 fi
 
 TABLE_BASE_PATH="${DATA_PATH}/${TABLE_NAME}"
-
 if [[ -n "$BATCH_ID_ARG" ]]; then
   STREAMER_SOURCE_ROOT="${SOURCE_DATA}/batch_${BATCH_ID_ARG}"
 else
@@ -146,8 +145,6 @@ if [ ! -f "$HUDI_SPARK_JAR" ]; then
   exit 1
 fi
 HUDI_JARS="${HUDI_SPARK_JAR},${HUDI_UTILITIES_JAR}"
-
-# Note: Hoodie 0.15+ Delta Streamer validates hoodie.compact.inline=true (StreamSync); do not set inline=false here.
 
 log_info "$(log_equal)"
 log_info "Running Hudi Streamer"
@@ -188,7 +185,8 @@ log_info "spark-submit command: $SPARK_HOME/bin/spark-submit \
   --hoodie-conf hoodie.streamer.schemaprovider.target.schema.file="$SCHEMA_FILE_ARG" \
   --hoodie-conf hoodie.datasource.write.recordkey.field=col_1 \
   --hoodie-conf hoodie.datasource.write.precombine.field=col_1 \
-  --hoodie-conf hoodie.datasource.write.partitionpath.field=partition_col"
+  --hoodie-conf hoodie.datasource.write.partitionpath.field=partition_col" \
+  --hoodie-conf hoodie.parquet.small.file.limit=-1
 log_info "$(log_hipen)"
 
 
@@ -230,7 +228,8 @@ if time "${SPARK_HOME}/bin/spark-submit" \
   --hoodie-conf hoodie.streamer.schemaprovider.target.schema.file="$SCHEMA_FILE_ARG" \
   --hoodie-conf hoodie.datasource.write.recordkey.field=col_1 \
   --hoodie-conf hoodie.datasource.write.precombine.field=col_1 \
-  --hoodie-conf hoodie.datasource.write.partitionpath.field=partition_col
+  --hoodie-conf hoodie.datasource.write.partitionpath.field=partition_col \
+  --hoodie-conf hoodie.parquet.small.file.limit=-1
 then
   _wp_end=$(date +%s)
   _wp_dur=$((_wp_end - _wp_start))
