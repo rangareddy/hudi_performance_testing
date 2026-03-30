@@ -36,37 +36,25 @@ download_hudi_jars() {
   hudi_utilities_slim_bundle_jar="hudi-utilities-slim-bundle_${SCALA_VERSION}-${hudi_version}.jar"
   # Check and download hudi spark bundle
   if [[ ! -f "$JARS_PATH/$hudi_spark_bundle_jar" ]]; then
-    curl -s -o $JARS_PATH/${hudi_spark_bundle_jar} \
-      ${MVN_APACHE_URL}/hudi/hudi-spark${SPARK_MAJOR_VERSION}-bundle_${SCALA_VERSION}-${hudi_version}/${hudi_spark_bundle_jar}
+    aws s3 cp $S3_JARS_PATH/${hudi_version_suffix}/${SPARK_MAJOR_VERSION}/${hudi_spark_bundle_jar} \
+      $JARS_PATH/${hudi_spark_bundle_jar}
     if [ $? -eq 0 ]; then
       log_success "Hudi Spark Bundle $hudi_spark_bundle_jar downloaded successfully"
     else
-      aws s3 cp $S3_JARS_PATH/${hudi_version_suffix}/${SPARK_MAJOR_VERSION}/${hudi_spark_bundle_jar} \
-        $JARS_PATH/${hudi_spark_bundle_jar}
-      if [ $? -eq 0 ]; then
-        log_success "Hudi Spark Bundle $hudi_spark_bundle_jar downloaded successfully"
-      else
-        log_error "Failed to download Hudi Spark Bundle $hudi_spark_bundle_jar"
-        exit 1
-      fi
+      log_error "Failed to download Hudi Spark Bundle $hudi_spark_bundle_jar"
+      exit 1
     fi
   fi
   
   # Check and download hudi utilities slim bundle
   if [[ ! -f "$JARS_PATH/$hudi_utilities_slim_bundle_jar" ]]; then
-    curl -s -o $JARS_PATH/${hudi_utilities_slim_bundle_jar} \
-      ${MVN_APACHE_URL}/hudi/hudi-utilities-slim-bundle_${SCALA_VERSION}-${hudi_version}/${hudi_utilities_slim_bundle_jar}
+    aws s3 cp $S3_JARS_PATH/${hudi_version_suffix}/${SPARK_MAJOR_VERSION}/$hudi_utilities_slim_bundle_jar \
+      $JARS_PATH/$hudi_utilities_slim_bundle_jar
     if [ $? -eq 0 ]; then
       log_success "Hudi Utilities Slim Bundle $hudi_utilities_slim_bundle_jar downloaded successfully"
     else
-      aws s3 cp $S3_JARS_PATH/${hudi_version_suffix}/${SPARK_MAJOR_VERSION}/$hudi_utilities_slim_bundle_jar \
-        $JARS_PATH/$hudi_utilities_slim_bundle_jar
-      if [ $? -eq 0 ]; then
-        log_success "Hudi Utilities Slim Bundle $hudi_utilities_slim_bundle_jar downloaded successfully"
-      else
-        log_error "Failed to download Hudi Utilities Slim Bundle $hudi_utilities_slim_bundle_jar"
-        exit 1
-      fi
+      log_error "Failed to download Hudi Utilities Slim Bundle $hudi_utilities_slim_bundle_jar"
+      exit 1
     fi
   fi
 }
