@@ -45,6 +45,7 @@ Clone the repository directly from GitHub to ensure you have the latest version:
 ```sh
 git clone https://github.com/rangareddy/hudi_performace_testing.git
 cd hudi_performace_testing
+#git checkout origin/hudi_015_minor_relase_perf
 ```
 
 **Option 2: Using AWS CLI**
