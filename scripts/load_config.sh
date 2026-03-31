@@ -41,7 +41,11 @@ load_config() {
   local script_dir
   # Directory containing this loader (and common.properties)
   script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-  local config_file="${CONFIG_FILE:-${script_dir}/common.properties}"
+  if [[ "${IS_EMR_CLUSTER:-true}" == "true" ]]; then
+    local config_file="${CONFIG_FILE:-${script_dir}/common.properties}"
+  else
+    local config_file="${CONFIG_FILE:-${script_dir}/common_local.properties}"
+  fi
 
   if [[ ! -f "$config_file" ]]; then
     log_warn "Warning: config file not found: $config_file" >&2
