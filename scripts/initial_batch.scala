@@ -72,7 +72,7 @@ println(s"Batch ID: $batchId")
 println(s"Columns: $numCols  Partitions: $numPartitions  Records: $numRecords")
 println(s"Logical Timestamp Enabled: $enableLogicalTs")
 
-val data = spark.sparkContext.parallelize(1 to numRecords, numPartitions).map { i =>
+val data = spark.sparkContext.parallelize(1 to numPartitions, numRecords).map { i =>
   val localTs = baseTime.plusSeconds(i)
   val values = (1 to numCols).map { colIdx =>
     if (colIdx <= 10) {

@@ -221,7 +221,6 @@ if time "${SPARK_HOME}/bin/spark-submit" \
   --deploy-mode client \
   --jars "$SPARK_SUBMIT_JARS" \
   --properties-file "${SPARK_DEFAULTS_CONF}" \
-  --conf spark.sql.adaptive.enabled=true \
   --conf spark.serializer=org.apache.spark.serializer.KryoSerializer \
   --conf spark.sql.extensions=org.apache.spark.sql.hudi.HoodieSparkSessionExtension \
   --conf spark.sql.catalog.spark_catalog=org.apache.spark.sql.hudi.catalog.HoodieCatalog \
