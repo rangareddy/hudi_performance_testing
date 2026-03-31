@@ -4,15 +4,15 @@
 #   Baseline: 5 batches — Hudi ingestion always uses SOURCE_HUDI_VERSION.
 #   Experiment: 5 batches — batches 0–2 use SOURCE_HUDI_VERSION, batches 3–4 use TARGET_HUDI_VERSION.
 #   Each batch: parquet → Hudi ingestion (all 5 batches complete first).
-#   COPY_ON_WRITE: one read benchmark after all ingests (full table).
-#   MERGE_ON_READ: read benchmark before compaction, then compaction, then read benchmark again (post-compaction CSV).
+#   COPY_ON_WRITE: read benchmark(s) after all ingests (full table); count from read_performance_iterations in common.properties.
+#   MERGE_ON_READ: read benchmark(s) before compaction, then compaction, then read benchmark(s) again (post-compaction CSV).
 #   Baseline and experiment use separate Hudi table paths (--table-name-suffix baseline|experiment).
 #   After both phases: compare write + read performance (reports + S3).
 #
 # State (two levels, one file per phase under .e2e_state/, mirrored to S3):
 #   1) Phase:   phase_completeness=success — entire phase done; skip all its steps unless --force.
 #   2) Batch/stage: step<idx>_<job>_<batchId>_<kind>=success|failure — parquet / hudi / benchmark (and mor_* for MOR).
-#      After ingest: one read step (COW/MOR); MOR adds mor_<phase>_compaction and mor_<phase>_benchmark_post_compact.
+#      After ingest: read benchmark step(s) (read_performance_iterations); MOR adds compaction + post-compact read step(s).
 #
 # Usage:
 #   bash run_e2e_performance_test.sh --table-type COPY_ON_WRITE
@@ -124,6 +124,13 @@ BENCHMARK_CSV_PATH=""
 WRITE_PERF_CSV=""
 export TABLE_TYPE IS_LOGICAL_TIMESTAMP_ENABLED
 
+# Read benchmarks: iterations per suite step (common.properties read_performance_iterations; min 1).
+READ_PERF_ITERATIONS="${read_performance_iterations:-${READ_PERFORMANCE_ITERATIONS:-1}}"
+if ! [[ "${READ_PERF_ITERATIONS}" =~ ^[0-9]+$ ]] || [[ "${READ_PERF_ITERATIONS}" -lt 1 ]]; then
+  READ_PERF_ITERATIONS=1
+fi
+export read_performance_iterations="${READ_PERF_ITERATIONS}"
+
 # Log file: logs/<YYYYMMDD>/e2e_<table>_v<ver>_<lts>.log
 LOG_DIR="${SCRIPT_DIR}/logs"
 LOG_RUN_ID="$(date +%Y%m%d)"
@@ -145,9 +152,10 @@ log_info "  E2E Hudi Performance Test"
 log_info "  Table type          : $TABLE_TYPE"
 log_info "  Source Hudi version : $SOURCE_HUDI_VERSION"
 log_info "  Target Hudi version : $TARGET_HUDI_VERSION"
-log_info "  Phases              : baseline (5 ingest + one read) then experiment (5 ingest, 0-2 SOURCE / 3-4 TARGET + one read)"
-log_info "  COW                 : single full-table read after all ingests"
-log_info "  MOR                 : read before compaction, then compaction, then post-compaction read"
+log_info "  Phases              : baseline (5 ingest + read x${READ_PERF_ITERATIONS}) then experiment (5 ingest, 0-2 SOURCE / 3-4 TARGET + read x${READ_PERF_ITERATIONS})"
+log_info "  COW                 : full-table read after all ingests (${READ_PERF_ITERATIONS} iteration(s) per step)"
+log_info "  MOR                 : read before compaction, then compaction, then post-compaction read (${READ_PERF_ITERATIONS} iter each read step)"
+log_info "  Read iterations     : ${READ_PERF_ITERATIONS} (read_performance_iterations in common.properties)"
 log_equal
 
 get_step_status() {
@@ -338,9 +346,9 @@ run_e2e_phase() {
     log_info "  Hudi ingestion: SOURCE (${SOURCE_HUDI_VERSION}) for batches 0–2; TARGET (${TARGET_HUDI_VERSION}) for batches 3–4"
   fi
   if [[ "$TABLE_TYPE" == "COPY_ON_WRITE" ]]; then
-    log_info "  Read benchmark: one full-table run (${BENCH_HUDI_VERSIONS})"
+    log_info "  Read benchmark: ${READ_PERF_ITERATIONS} full-table run(s) (${BENCH_HUDI_VERSIONS})"
   else
-    log_info "  Read benchmarks: before compaction + after compaction (${BENCH_HUDI_VERSIONS})"
+    log_info "  Read benchmarks: ${READ_PERF_ITERATIONS} run(s) before compaction + ${READ_PERF_ITERATIONS} after (${BENCH_HUDI_VERSIONS})"
   fi
   log_equal
 
@@ -365,7 +373,7 @@ run_e2e_phase() {
 
   local step_num=0
   local TOTAL_BATCHES=5
-  # Ingest: 2 steps per batch; then one read benchmark; MOR adds compaction + post-compact read.
+  # Ingest: 2 steps per batch; then read benchmark (READ_PERF_ITERATIONS via --iterations); MOR adds compaction + post-compact read.
   local INGEST_STEPS=$((TOTAL_BATCHES * 2))
   local PHASE_TOTAL_STEPS=$((INGEST_STEPS + 1))
   if [[ "$TABLE_TYPE" == "MERGE_ON_READ" ]]; then
@@ -425,19 +433,21 @@ run_e2e_phase() {
 
   step_num=$((step_num + 1))
   if [[ "$TABLE_TYPE" == "COPY_ON_WRITE" ]]; then
-    run_step "step${step_num}_post_ingest_read" "[${phase}] Step ${step_num}/${PHASE_TOTAL_STEPS}: Full-table read benchmark (${BENCH_HUDI_VERSIONS})" \
+    run_step "step${step_num}_post_ingest_read" "[${phase}] Step ${step_num}/${PHASE_TOTAL_STEPS}: Full-table read benchmark x${READ_PERF_ITERATIONS} (${BENCH_HUDI_VERSIONS})" \
       python3 "${SCRIPT_DIR}/run_benchmark_suite.py" \
         --table-type "$TABLE_TYPE" \
         --hudi-versions "$BENCH_HUDI_VERSIONS" \
         --batch-id 0 \
+        --iterations "${READ_PERF_ITERATIONS}" \
         --table-name-suffix "$phase" \
         --output "$BENCHMARK_CSV_PATH"
   else
-    run_step "step${step_num}_read_before_compact" "[${phase}] Step ${step_num}/${PHASE_TOTAL_STEPS}: MOR read benchmark before compaction (${BENCH_HUDI_VERSIONS})" \
+    run_step "step${step_num}_read_before_compact" "[${phase}] Step ${step_num}/${PHASE_TOTAL_STEPS}: MOR read before compaction x${READ_PERF_ITERATIONS} (${BENCH_HUDI_VERSIONS})" \
       python3 "${SCRIPT_DIR}/run_benchmark_suite.py" \
         --table-type "$TABLE_TYPE" \
         --hudi-versions "$BENCH_HUDI_VERSIONS" \
         --batch-id 0 \
+        --iterations "${READ_PERF_ITERATIONS}" \
         --table-name-suffix "$phase" \
         --output "$BENCHMARK_CSV_PATH"
   fi
@@ -460,11 +470,12 @@ run_e2e_phase() {
     upload_write_perf_csv_to_s3
 
     step_num=$((step_num + 1))
-    run_step "mor_${phase}_benchmark_post_compact" "[${phase}] Step ${step_num}/${PHASE_TOTAL_STEPS}: MOR read benchmark after compaction (${BENCH_HUDI_VERSIONS})" \
+    run_step "mor_${phase}_benchmark_post_compact" "[${phase}] Step ${step_num}/${PHASE_TOTAL_STEPS}: MOR read after compaction x${READ_PERF_ITERATIONS} (${BENCH_HUDI_VERSIONS})" \
       python3 "${SCRIPT_DIR}/run_benchmark_suite.py" \
         --table-type "$TABLE_TYPE" \
         --hudi-versions "$BENCH_HUDI_VERSIONS" \
         --batch-id 5 \
+        --iterations "${READ_PERF_ITERATIONS}" \
         --table-name-suffix "$phase" \
         --output "$BENCHMARK_POST_COMPACT_CSV"
     upload_benchmark_csv_to_s3
@@ -479,7 +490,7 @@ run_e2e_phase() {
 
 if [[ "$DRY_RUN" == true ]]; then
   log_echo ""
-  log_echo "[DRY RUN] Would execute: baseline (5 ingest + 1 read [+ MOR compact + post-read]), experiment same, then comparison report"
+  log_echo "[DRY RUN] Would execute: baseline (5 ingest + read x${READ_PERF_ITERATIONS} [+ MOR compact + post-read x${READ_PERF_ITERATIONS}]), experiment same, then comparison report"
 fi
 
 run_e2e_phase baseline

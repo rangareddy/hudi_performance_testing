@@ -197,23 +197,6 @@ def _int_or_zero(val: str) -> int:
         return 0
 
 
-def sum_read_seconds(path: Path) -> Tuple[float, int]:
-    """Sum execution_time_seconds for rows with status ok."""
-    if not path.is_file():
-        return 0.0, 0
-    total = 0.0
-    n = 0
-    with open(path, newline="") as f:
-        r = csv.DictReader(f)
-        for row in r:
-            if (row.get("status") or "").strip() != "ok":
-                continue
-            sec = _float_or_zero(row.get("execution_time_seconds", ""))
-            total += sec
-            n += 1
-    return total, n
-
-
 def sum_write_seconds(
     path: Path,
     operation_filter: Optional[str] = None,
@@ -297,8 +280,8 @@ def load_hudi_delta_streamer_by_batch(path: Path) -> Dict[int, float]:
 
 
 def load_read_by_batch(path: Path) -> Dict[int, Tuple[float, int]]:
-    """Read benchmark: execution_time_seconds and count for status ok; last row wins per batch_id."""
-    best: Dict[int, Tuple[int, float, int]] = {}  # batch_id -> (run_sequence, sec, count)
+    """Read benchmark: for each batch_id, pick one ok row with max (run_sequence, iteration)."""
+    best: Dict[int, Tuple[int, int, float, int]] = {}  # batch_id -> (run_sequence, iteration, sec, count)
     if not path.is_file():
         return {}
     with open(path, newline="") as f:
@@ -307,12 +290,22 @@ def load_read_by_batch(path: Path) -> Dict[int, Tuple[float, int]]:
                 continue
             bid = _int_or_zero(row.get("batch_id", ""))
             seq = _int_or_zero(row.get("run_sequence", "0"))
+            itn = _int_or_zero((row.get("iteration") or "1").strip())
             sec = _float_or_zero(row.get("execution_time_seconds", ""))
             cnt = _int_or_zero(row.get("count", "0"))
             prev = best.get(bid)
-            if prev is None or seq >= prev[0]:
-                best[bid] = (seq, sec, cnt)
-    return {k: (v[1], v[2]) for k, v in best.items()}
+            if prev is None or (seq, itn) > (prev[0], prev[1]):
+                best[bid] = (seq, itn, sec, cnt)
+    return {k: (v[2], v[3]) for k, v in best.items()}
+
+
+def sum_read_seconds(path: Path) -> Tuple[float, int]:
+    """Sum execution_time_seconds over batch_ids using the same best-row rule as load_read_by_batch."""
+    by_batch = load_read_by_batch(path)
+    if not by_batch:
+        return 0.0, 0
+    total = sum(sec for sec, _ in by_batch.values())
+    return total, len(by_batch)
 
 
 def table_type_from_read_csv(path: Path) -> str:

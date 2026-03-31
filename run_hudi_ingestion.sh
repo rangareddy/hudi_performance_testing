@@ -27,12 +27,6 @@ usage() {
   exit 1
 }
 
-# Schema file: use file:// if local path
-SCHEMA_FILE_ARG="$SCHEMA_FILE"
-if [[ -n "$SCHEMA_FILE_ARG" && "$SCHEMA_FILE_ARG" != file://* && "$SCHEMA_FILE_ARG" != s3:* ]]; then
-  SCHEMA_FILE_ARG="file://${SCHEMA_FILE}"
-fi
-
 TARGET_HUDI_VERSION="$HUDI_VERSION"
 BATCH_ID_ARG=""
 TABLE_NAME_SUFFIX_ARG=""
@@ -98,6 +92,18 @@ TABLE_TYPE_UPPER=$(echo "$TABLE_TYPE" | tr '[:lower:]' '[:upper:]')
 HUDI_VERSION_SUFFIX=$(echo "$TARGET_HUDI_VERSION" | sed 's/-.*//' | cut -d. -f1,2 | tr '.' '_')
 IS_LOGICAL_TIMESTAMP_ENABLED=${IS_LOGICAL_TIMESTAMP_ENABLED:-true}
 BASE_TABLE_NAME=${BASE_TABLE_NAME:-hudi_regular}
+
+# Schema file:
+# - IS_LOGICAL_TIMESTAMP_ENABLED=true  -> use SCHEMA_FILE (default: scripts/full_schema.avsc)
+# - IS_LOGICAL_TIMESTAMP_ENABLED=false -> use full_schema_no_lts_string_ts.avsc (ts_micros_*/ts_millis_* as string)
+_schema_effective="${SCHEMA_FILE:-${SCRIPT_DIR}/scripts/lts_schema.avsc}"
+if [[ "$IS_LOGICAL_TIMESTAMP_ENABLED" != true ]]; then
+  _schema_effective="${SCHEMA_FILE_NO_LTS_STRING_TS:-${SCRIPT_DIR}/scripts/non_lts_schema.avsc}"
+fi
+SCHEMA_FILE_ARG="$_schema_effective"
+if [[ -n "$SCHEMA_FILE_ARG" && "$SCHEMA_FILE_ARG" != file://* && "$SCHEMA_FILE_ARG" != s3:* ]]; then
+  SCHEMA_FILE_ARG="file://${SCHEMA_FILE_ARG}"
+fi
 
 case "$TABLE_TYPE_UPPER" in
   COPY_ON_WRITE|COW)
