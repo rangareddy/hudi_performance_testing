@@ -14,7 +14,7 @@
       "name": "col_2",
       "type": [
         "null",
-        "string"
+        "int"
       ],
       "default": null
     },
@@ -22,7 +22,7 @@
       "name": "col_3",
       "type": [
         "null",
-        "string"
+        "int"
       ],
       "default": null
     },
@@ -30,7 +30,7 @@
       "name": "col_4",
       "type": [
         "null",
-        "string"
+        "long"
       ],
       "default": null
     },
@@ -38,7 +38,7 @@
       "name": "col_5",
       "type": [
         "null",
-        "string"
+        "float"
       ],
       "default": null
     },
@@ -46,7 +46,7 @@
       "name": "col_6",
       "type": [
         "null",
-        "string"
+        "double"
       ],
       "default": null
     },
@@ -54,7 +54,14 @@
       "name": "col_7",
       "type": [
         "null",
-        "string"
+        {
+          "type": "fixed",
+          "name": "fixed",
+          "size": 8,
+          "logicalType": "decimal",
+          "precision": 18,
+          "scale": 2
+        }
       ],
       "default": null
     },
@@ -62,7 +69,10 @@
       "name": "col_8",
       "type": [
         "null",
-        "string"
+        {
+          "type": "int",
+          "logicalType": "date"
+        }
       ],
       "default": null
     },
@@ -70,7 +80,10 @@
       "name": "col_9",
       "type": [
         "null",
-        "string"
+        {
+          "type": "long",
+          "logicalType": "timestamp-micros"
+        }
       ],
       "default": null
     },

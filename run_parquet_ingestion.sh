@@ -97,11 +97,29 @@ append_parquet_write_perf() {
 }
 
 export TARGET_DATA="${SOURCE_DATA}/batch_${REQUESTED_BATCH_ID}"
-if aws s3 ls "$TARGET_DATA" > /dev/null 2>&1; then
+_target_exists=false
+if [[ "$TARGET_DATA" == s3://* ]]; then
+  if aws s3 ls "$TARGET_DATA" >/dev/null 2>&1; then
+    _target_exists=true
+  fi
+else
+  # Local/FS path: consider it present if directory exists and has at least one file.
+  if [[ -d "$TARGET_DATA" ]]; then
+    shopt -s nullglob dotglob
+    _files=("$TARGET_DATA"/*)
+    shopt -u nullglob dotglob
+    if ((${#_files[@]})); then
+      _target_exists=true
+    fi
+  fi
+fi
+
+if [[ "$_target_exists" == true ]]; then
   log_success "✅ Target data already exists at ${TARGET_DATA}. Skipping ${INGESTION_TYPE_TITLE} ingestion for batch ${REQUESTED_BATCH_ID}."
   append_parquet_write_perf 0 skipped_existing
   exit 0
 fi
+unset _files
 
 export BATCH_ID="$REQUESTED_BATCH_ID"
 

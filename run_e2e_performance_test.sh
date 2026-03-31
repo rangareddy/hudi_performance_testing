@@ -137,13 +137,56 @@ LOG_RUN_ID="$(date +%Y%m%d)"
 LOG_SUBDIR="${LOG_DIR}/${LOG_RUN_ID}"
 mkdir -p "$LOG_SUBDIR"
 LOG_FILE="${LOG_SUBDIR}/e2e_${TABLE_TYPE_LOWER}_v${TARGET_VERSION}_${IS_LOGICAL_TIMESTAMP_ENABLED}.log"
+STEP_TIMINGS_CSV="${LOG_SUBDIR}/e2e_${TABLE_TYPE_LOWER}_v${TARGET_VERSION}_${IS_LOGICAL_TIMESTAMP_ENABLED}_step_timings.csv"
 
 # Create log file and write all output to it (and console) via helper
 : > "$LOG_FILE"
 log_echo() { printf '%s\n' "$*" | tee -a "$LOG_FILE"; }
 log_run() { "$@" 2>&1 | tee -a "$LOG_FILE"; return "${PIPESTATUS[0]}"; }
 
+# Per-step timing log (CSV): written even if the main run fails mid-way.
+# NOTE: uses UTC epoch seconds for easy aggregation.
+_init_step_timings_csv() {
+  if [[ -f "$STEP_TIMINGS_CSV" ]]; then
+    return 0
+  fi
+  printf '%s\n' "run_id,table_type,is_logical_timestamp,phase,step_id,step_name,status,start_ts_utc,end_ts_utc,duration_seconds,command" > "$STEP_TIMINGS_CSV"
+}
+
+_csv_escape() {
+  local s="${1:-}"
+  s="${s//\"/\"\"}"
+  printf '"%s"' "$s"
+}
+
+_log_step_timing() {
+  local phase="$1"
+  local step_id="$2"
+  local step_name="$3"
+  local st="$4"
+  local start_ts="$5"
+  local end_ts="$6"
+  local dur="$7"
+  shift 7
+  local cmd_str="$*"
+  _init_step_timings_csv
+  printf '%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s\n' \
+    "$LOG_RUN_ID" \
+    "$TABLE_TYPE" \
+    "$IS_LOGICAL_TIMESTAMP_ENABLED" \
+    "$phase" \
+    "$step_id" \
+    "$(_csv_escape "$step_name")" \
+    "$st" \
+    "$start_ts" \
+    "$end_ts" \
+    "$dur" \
+    "$(_csv_escape "$cmd_str")" \
+    >> "$STEP_TIMINGS_CSV"
+}
+
 echo "Log file: $LOG_FILE"
+echo "Step timings: $STEP_TIMINGS_CSV"
 E2E_START_TS=$(date +%s)
 trap 'E2E_SCRIPT_EXIT_CODE=$?; _e2e_exit_finalize' EXIT
 
@@ -238,6 +281,12 @@ upload_e2e_log_to_s3() {
   local s3_log_file="${S3_LOGS_DIR}/${LOG_RUN_ID}/$(basename "$LOG_FILE")"
   echo "Uploading log to S3: $s3_log_file"
   aws s3 cp "$LOG_FILE" "$s3_log_file" --only-show-errors 2>&1 | tee -a "$LOG_FILE" || true
+
+  if [[ -f "${STEP_TIMINGS_CSV:-}" ]]; then
+    local s3_timings="${S3_LOGS_DIR}/${LOG_RUN_ID}/$(basename "$STEP_TIMINGS_CSV")"
+    echo "Uploading step timings to S3: $s3_timings"
+    aws s3 cp "$STEP_TIMINGS_CSV" "$s3_timings" --only-show-errors 2>&1 | tee -a "$LOG_FILE" || true
+  fi
 }
 
 _format_e2e_elapsed() {
@@ -293,6 +342,7 @@ run_step() {
     log_hipen
     log_echo ">>> $step_name [SKIPPED - already succeeded]"
     log_hipen
+    _log_step_timing "${phase:-}" "$step_id" "$step_name" "skipped" "$(date -u +%s)" "$(date -u +%s)" "0" "$@"
     return 0
   fi
 
@@ -308,14 +358,23 @@ run_step() {
   fi
   log_echo "    $*"
   if [[ "$DRY_RUN" == true ]]; then
+    _log_step_timing "${phase:-}" "$step_id" "$step_name" "dry_run" "$(date -u +%s)" "$(date -u +%s)" "0" "$@"
     return 0
   fi
+  local _st _et _dur
+  _st=$(date -u +%s)
   if log_run "$@"; then
     set_step_status "$step_id" "success"
     log_echo "✅ Success (state saved)"
+    _et=$(date -u +%s)
+    _dur=$((_et - _st))
+    _log_step_timing "${phase:-}" "$step_id" "$step_name" "success" "$_st" "$_et" "$_dur" "$@"
   else
     set_step_status "$step_id" "failure"
     log_echo "❌ Failed (state saved; will retry this step next run)"
+    _et=$(date -u +%s)
+    _dur=$((_et - _st))
+    _log_step_timing "${phase:-}" "$step_id" "$step_name" "failure" "$_st" "$_et" "$_dur" "$@"
     return 1
   fi
 }
