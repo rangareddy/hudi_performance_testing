@@ -137,6 +137,8 @@ log_echo() { printf '%s\n' "$*" | tee -a "$LOG_FILE"; }
 log_run() { "$@" 2>&1 | tee -a "$LOG_FILE"; return "${PIPESTATUS[0]}"; }
 
 echo "Log file: $LOG_FILE"
+E2E_START_TS=$(date +%s)
+trap 'E2E_SCRIPT_EXIT_CODE=$?; _e2e_exit_finalize' EXIT
 
 log_equal
 log_info "  E2E Hudi Performance Test"
@@ -216,6 +218,61 @@ upload_comparison_csv_to_s3() {
       aws s3 cp "$f" "${BASE_PATH}/reports/$(basename "$f")" --only-show-errors 2>&1 | tee -a "$LOG_FILE" || true
     fi
   done
+}
+
+upload_e2e_log_to_s3() {
+  if [[ "$DRY_RUN" == true ]] || [[ "${IS_LOCAL_RUN:-false}" == "true" ]]; then
+    return 0
+  fi
+  if [[ ! -f "${LOG_FILE:-}" ]]; then
+    return 0
+  fi
+  local s3_log_file="${S3_LOGS_DIR}/${LOG_RUN_ID}/$(basename "$LOG_FILE")"
+  echo "Uploading log to S3: $s3_log_file"
+  aws s3 cp "$LOG_FILE" "$s3_log_file" --only-show-errors 2>&1 | tee -a "$LOG_FILE" || true
+}
+
+_format_e2e_elapsed() {
+  local d=$1
+  if [[ "${OSTYPE:-}" == darwin* ]]; then
+    date -u -r "$d" +%H:%M:%S 2>/dev/null || printf '%ss\n' "$d"
+  else
+    date -u -d "@$d" +%H:%M:%S 2>/dev/null || printf '%ss\n' "$d"
+  fi
+}
+
+# Runs on every exit (success or failure) so S3 uploads and timing still happen if set -e stops the script mid-run.
+_e2e_exit_finalize() {
+  if [[ -z "${LOG_FILE:-}" || ! -f "$LOG_FILE" ]]; then
+    return 0
+  fi
+  local end_ts dur fmt
+  end_ts=$(date +%s)
+  if [[ -n "${E2E_START_TS:-}" ]]; then
+    dur=$((end_ts - E2E_START_TS))
+  else
+    dur=0
+  fi
+  fmt=$(_format_e2e_elapsed "$dur")
+  log_echo "Total wall time (run_e2e_performance_test.sh): ${fmt} (${dur}s)"
+  if [[ "${E2E_SCRIPT_EXIT_CODE:-0}" -ne 0 ]]; then
+    log_echo "Exiting with status ${E2E_SCRIPT_EXIT_CODE} (uploading artifacts to S3 where applicable)"
+  fi
+
+  if [[ "$DRY_RUN" == true ]]; then
+    return 0
+  fi
+  if [[ "${IS_LOCAL_RUN:-false}" == "true" ]]; then
+    log_info "IS_LOCAL_RUN=true: skipping benchmark/write/comparison CSV and log uploads to S3 (local log: $LOG_FILE)"
+    echo "IS_LOCAL_RUN=true: E2E state and reports kept locally under ${SCRIPT_DIR}/.e2e_state/ and ${REPORTS_DIR}/"
+    return 0
+  fi
+
+  upload_benchmark_csv_to_s3
+  upload_write_perf_csv_to_s3
+  upload_comparison_csv_to_s3
+  upload_e2e_log_to_s3
+  echo "E2E state synced to S3 per phase after each step (baseline + experiment state files under ${BASE_PATH}/e2e_state/)"
 }
 
 run_step() {
@@ -438,6 +495,8 @@ if [[ "$DRY_RUN" != true ]]; then
     --experiment-read "${BENCHMARK_REPORT_STEM}_experiment.csv"
     --baseline-write "${WRITE_REPORT_STEM}_baseline.csv"
     --experiment-write "${WRITE_REPORT_STEM}_experiment.csv"
+    --baseline-hudi-version "${SOURCE_HUDI_VERSION}"
+    --experiment-hudi-version "${TARGET_HUDI_VERSION}"
     --output "$COMPARISON_CSV"
   )
   if [[ "$TABLE_TYPE" == "MERGE_ON_READ" ]]; then
@@ -453,29 +512,7 @@ if [[ "$DRY_RUN" != true ]]; then
   fi
 fi
 
-# Upload results and log to S3 (skipped when IS_LOCAL_RUN=true — BASE_PATH is often local, not s3://)
-if [[ "$DRY_RUN" != true ]]; then
-  if [[ "${IS_LOCAL_RUN:-false}" == "true" ]]; then
-    log_info "IS_LOCAL_RUN=true: skipping benchmark/write/comparison CSV uploads to S3"
-  fi
-  upload_benchmark_csv_to_s3
-  upload_write_perf_csv_to_s3
-  upload_comparison_csv_to_s3
-  if [[ -f "$LOG_FILE" ]]; then
-    if [[ "${IS_LOCAL_RUN:-false}" == "true" ]]; then
-      log_info "IS_LOCAL_RUN=true: skipping log upload to S3 (local log: $LOG_FILE)"
-    else
-      S3_LOG_FILE="${S3_LOGS_DIR}/${LOG_RUN_ID}/$(basename "$LOG_FILE")"
-      echo "Uploading log to S3: $S3_LOG_FILE"
-      aws s3 cp "$LOG_FILE" "$S3_LOG_FILE" --only-show-errors 2>&1 | tee -a "$LOG_FILE" || true
-    fi
-  fi
-  if [[ "${IS_LOCAL_RUN:-false}" == "true" ]]; then
-    echo "IS_LOCAL_RUN=true: E2E state and reports kept locally under ${SCRIPT_DIR}/.e2e_state/ and ${REPORTS_DIR}/"
-  else
-    echo "E2E state synced to S3 per phase after each step (baseline + experiment state files under ${BASE_PATH}/e2e_state/)"
-  fi
-fi
+# Final S3 uploads, log upload, and wall-clock duration run in EXIT trap (_e2e_exit_finalize) so they still run after errors.
 
 log_info "$(log_equal)"
 echo "E2E performance test completed"
@@ -486,13 +523,14 @@ fi
 echo "Write performance: ${WRITE_REPORT_STEM}_{baseline,experiment}.csv"
 # compare_e2e_phases.py appends _<baseline_hudi>_vs_<experiment_hudi> before .csv
 shopt -s nullglob
-_cmp_written=("${REPORTS_DIR}"/e2e_baseline_vs_experiment*.csv)
+_cmp_prefix="${REPORTS_DIR}/e2e_baseline_vs_experiment_${BENCHMARK_TABLE_SUFFIX}_${IS_LOGICAL_TIMESTAMP_ENABLED}_${BENCHMARK_VERSION_SUFFIX}"
+_cmp_written=("${_cmp_prefix}"*.csv)
 if ((${#_cmp_written[@]})); then
   for _cf in "${_cmp_written[@]}"; do
     echo "Comparison report: ${_cf}"
   done
 else
-  echo "Comparison report: (expected under ${REPORTS_DIR}/e2e_baseline_vs_experiment*_vs_*.csv)"
+  echo "Comparison report: (expected ${_cmp_prefix}_<ver>_vs_<ver>.csv and _per_batch_tables.csv)"
 fi
 shopt -u nullglob
 echo "Log file         : $LOG_FILE"

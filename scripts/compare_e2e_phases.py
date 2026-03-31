@@ -77,8 +77,55 @@ def hudi_version_from_csv(path: Path) -> str:
     return ""
 
 
-def version_tag_for_filenames(baseline_read: Path, experiment_read: Path) -> str:
-    """Safe token for filenames, e.g. 0_15_0_vs_0_16_0 from baseline vs experiment versions."""
+def hudi_version_for_filename_from_read(path: Path) -> str:
+    """Prefer ok benchmark rows; fall back to any row with hudi_version (avoids unknown_vs_unknown when status is missing)."""
+    v = hudi_version_from_csv(path)
+    if v:
+        return v
+    if not path.is_file():
+        return ""
+    with open(path, newline="") as f:
+        for row in csv.DictReader(f):
+            v = (row.get("hudi_version") or "").strip()
+            if v:
+                return v
+    return ""
+
+
+def hudi_version_for_filename_from_write_phase(path: Path, phase: str) -> str:
+    """Infer tag version from write perf: baseline uses streamer row at min batch_id; experiment at max batch_id."""
+    if not path.is_file():
+        return ""
+    candidates: List[Tuple[int, str]] = []
+    with open(path, newline="") as f:
+        for row in csv.DictReader(f):
+            if (row.get("status") or "").strip() != "ok":
+                continue
+            op = (row.get("operation") or "").strip()
+            if op not in STREAMER_WRITE_OPERATIONS:
+                continue
+            hv = (row.get("hudi_version") or "").strip()
+            if not hv:
+                continue
+            bid = _int_or_zero(row.get("batch_id", ""))
+            candidates.append((bid, hv))
+    if not candidates:
+        return ""
+    if phase == "experiment":
+        return max(candidates, key=lambda x: x[0])[1]
+    return min(candidates, key=lambda x: x[0])[1]
+
+
+def version_tag_for_filenames(
+    baseline_read: Path,
+    experiment_read: Path,
+    *,
+    baseline_write: Optional[Path] = None,
+    experiment_write: Optional[Path] = None,
+    baseline_hudi_version: str = "",
+    experiment_hudi_version: str = "",
+) -> str:
+    """Safe token for filenames, e.g. 0.15.0_vs_0.15.1."""
 
     def tok(s: str) -> str:
         t = (s or "").strip() or "unknown"
@@ -86,7 +133,23 @@ def version_tag_for_filenames(baseline_read: Path, experiment_read: Path) -> str
             t = t.replace(c, "_")
         return t.replace(" ", "_")
 
-    return f"{tok(hudi_version_from_csv(baseline_read))}_vs_{tok(hudi_version_from_csv(experiment_read))}"
+    bv = (baseline_hudi_version or "").strip()
+    if not bv:
+        bv = hudi_version_for_filename_from_read(baseline_read)
+    if not bv and baseline_write is not None:
+        bv = hudi_version_for_filename_from_write_phase(baseline_write, "baseline")
+    if not bv:
+        bv = (os.environ.get("SOURCE_HUDI_VERSION") or "").strip()
+
+    ev = (experiment_hudi_version or "").strip()
+    if not ev:
+        ev = hudi_version_for_filename_from_read(experiment_read)
+    if not ev and experiment_write is not None:
+        ev = hudi_version_for_filename_from_write_phase(experiment_write, "experiment")
+    if not ev:
+        ev = (os.environ.get("TARGET_HUDI_VERSION") or "").strip()
+
+    return f"{tok(bv)}_vs_{tok(ev)}"
 
 
 def config_stem_from_read_baseline(path: Path) -> str:
@@ -584,9 +647,18 @@ def run_one_comparison(
     incremental_batch_size: int,
     tables_csv: Optional[Path],
     config_stem: str = "",
+    baseline_hudi_version: str = "",
+    experiment_hudi_version: str = "",
 ) -> None:
     stem_eff = effective_config_stem(config_stem, baseline_read)
-    ver_tag = version_tag_for_filenames(baseline_read, experiment_read)
+    ver_tag = version_tag_for_filenames(
+        baseline_read,
+        experiment_read,
+        baseline_write=baseline_write,
+        experiment_write=experiment_write,
+        baseline_hudi_version=baseline_hudi_version,
+        experiment_hudi_version=experiment_hudi_version,
+    )
     output = output.parent / f"{output.stem}_{ver_tag}{output.suffix}"
 
     detail_core = build_per_batch_detail(
@@ -664,7 +736,12 @@ def process_report_bundle(
         er_post = post_e if post_e.is_file() else None
         print(f"--- {bundle_dir.name}: {stem} ---")
         if not version_tag:
-            version_tag = version_tag_for_filenames(baseline_read, experiment_read)
+            version_tag = version_tag_for_filenames(
+                baseline_read,
+                experiment_read,
+                baseline_write=baseline_write,
+                experiment_write=experiment_write,
+            )
         detail_core = build_per_batch_detail(
             baseline_write,
             experiment_write,
@@ -755,6 +832,16 @@ def main() -> int:
         default=None,
         help="Per-batch detail CSV (default: next to --output with _per_batch_tables.csv).",
     )
+    p.add_argument(
+        "--baseline-hudi-version",
+        default="",
+        help="Override baseline version in output filename (default: read CSV, write CSV, or SOURCE_HUDI_VERSION).",
+    )
+    p.add_argument(
+        "--experiment-hudi-version",
+        default="",
+        help="Override experiment version in output filename (default: read CSV, write CSV, or TARGET_HUDI_VERSION).",
+    )
     args = p.parse_args()
 
     explicit = (
@@ -807,6 +894,8 @@ def main() -> int:
         args.incremental_batch_size,
         args.tables_csv,
         "",
+        baseline_hudi_version=(args.baseline_hudi_version or ""),
+        experiment_hudi_version=(args.experiment_hudi_version or ""),
     )
     return 0
 
