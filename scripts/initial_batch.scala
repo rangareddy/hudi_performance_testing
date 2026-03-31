@@ -72,8 +72,12 @@ println(s"Batch ID: $batchId")
 println(s"Columns: $numCols  Partitions: $numPartitions  Records: $numRecords")
 println(s"Logical Timestamp Enabled: $enableLogicalTs")
 
-val data = spark.sparkContext.parallelize(1 to numPartitions, numRecords).map { i =>
+// Configuration for 2,000 partitions with 100 records each
+val totalRecords = numPartitions * numRecordsPerPartition
+
+val data = spark.sparkContext.parallelize(1 to totalRecords, numPartitions).map { i =>
   val localTs = baseTime.plusSeconds(i)
+  // 1. Generate the values for the columns
   val values = (1 to numCols).map { colIdx =>
     if (colIdx <= 10) {
       firstTenTypes(colIdx - 1) match {
@@ -97,6 +101,7 @@ val data = spark.sparkContext.parallelize(1 to numPartitions, numRecords).map { 
           toTimestamp(localTs)
       }
     } else if (enableLogicalTs && colIdx % 50 == 0) {
+      // Logical Timestamp Logic
       if ((colIdx / 50) % 2 == 0)
         toMillis(localTs.plusNanos(colIdx * 1000))
       else
@@ -105,8 +110,12 @@ val data = spark.sparkContext.parallelize(1 to numPartitions, numRecords).map { 
       s"value_${i}_${colIdx}"
     }
   }
+  // 2. Add the partition column (col_1)
+  val partitionId = (i % numPartitions)
+  val partitionValue = f"partition_$partitionId%05d"
 
-  Row.fromSeq(values :+ f"partition_${i}%05d")
+  // 3. Construct the Row
+  Row.fromSeq(values :+ partitionValue)
 }
 
 // ----------------------------------------------------------------------
