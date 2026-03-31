@@ -15,6 +15,7 @@ import spark.implicits._
 val batchId: Int = sys.env.get("BATCH_ID").map(_.toInt).getOrElse(0)
 val numCols = sys.env.get("NUM_OF_COLUMNS").map(_.toInt).getOrElse(500)
 val numPartitions = sys.env.get("NUM_OF_PARTITIONS").map(_.toInt).getOrElse(10000)
+val numRecords = sys.env.get("NUM_OF_RECORDS").map(_.toInt).getOrElse(numPartitions)
 
 val DEFAULT_TARGET="s3://performance-benchmark-datasets-us-west-2/hudi-bench/performance/logical_ts_perf/data/wide_500cols_10000parts"
 val outputPath = sys.env.getOrElse("TARGET_DATA", DEFAULT_TARGET)
@@ -68,10 +69,10 @@ val schema = StructType(fields)
 // ----------------------------------------------------------------------
 println(s"🚀 Starting data generation")
 println(s"Batch ID: $batchId")
-println(s"Columns: $numCols  Partitions: $numPartitions")
+println(s"Columns: $numCols  Partitions: $numPartitions  Records: $numRecords")
 println(s"Logical Timestamp Enabled: $enableLogicalTs")
 
-val data = spark.sparkContext.parallelize(1 to numPartitions, numPartitions).map { i =>
+val data = spark.sparkContext.parallelize(1 to numRecords, numPartitions).map { i =>
   val localTs = baseTime.plusSeconds(i)
   val values = (1 to numCols).map { colIdx =>
     if (colIdx <= 10) {
@@ -112,17 +113,18 @@ val data = spark.sparkContext.parallelize(1 to numPartitions, numPartitions).map
 // Create DataFrame
 // ----------------------------------------------------------------------
 val df = spark.createDataFrame(data, schema)
-println(s"✅ Successfully generated DataFrame with ${numCols} columns and ${numPartitions} partitions.")
+println(s"✅ Successfully generated DataFrame with ${numCols} columns, ${numRecords} records, and ${numPartitions} partitions.")
 
 println(s"📝 Writing data to $outputPath")
-df.repartition($"partition_col")
+val num_of_repartitions = if (numRecords < 100) 1 else 10
+df.repartition(20, $"partition_col")
   .write
   .mode("overwrite")
   .parquet(outputPath)
 
 println(s"📍 Data written to: ${outputPath}")
 df.printSchema()
-df.show(5, false)
+df.show(1, false)
 
 // Stop the spark session
 spark.stop()

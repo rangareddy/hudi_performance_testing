@@ -156,9 +156,10 @@ log_equal
 EXECUTION_STATUS_CODE=0
 export NUM_OF_COLUMNS=${NUM_OF_COLUMNS:-500}
 export NUM_OF_PARTITIONS=${NUM_OF_PARTITIONS:-10000}
+export NUM_OF_RECORDS=${NUM_OF_RECORDS:-$NUM_OF_PARTITIONS}
 
 log_info "Executing $INGESTION_TYPE_TITLE ingestion"
-log_info "Dataset configuration: columns=${NUM_OF_COLUMNS}, partitions=${NUM_OF_PARTITIONS}"
+log_info "Dataset configuration: columns=${NUM_OF_COLUMNS}, partitions=${NUM_OF_PARTITIONS}, records=${NUM_OF_RECORDS}"
 
 if [[ "$INGESTION_TYPE" == "initial" ]]; then
   _wp_start=$(date +%s)
@@ -205,7 +206,7 @@ else
   log_info "Records to update per batch: ${NUM_OF_RECORDS_TO_UPDATE}"
   _wp_start=$(date +%s)
   log_info "Executing Command:"
-  echo "${SPARK_HOME}/bin/spark-submit --master ${SPARK_MASTER} --deploy-mode client${_PARQUET_JARS_ECHO} --properties-file ${SPARK_DEFAULTS_CONF} --conf spark.sql.adaptive.enabled=true --conf spark.hadoop.mapreduce.fileoutputcommitter.algorithm.version=2 --conf spark.hadoop.fs.s3a.committer.name=directory $EXECUTION_SCRIPT"
+  echo "${SPARK_HOME}/bin/spark-submit --master ${SPARK_MASTER} --deploy-mode client${_PARQUET_JARS_ECHO} --properties-file ${SPARK_DEFAULTS_CONF} $EXECUTION_SCRIPT"
   if [[ -n "${AWS_S3_JARS:-}" ]]; then
     _parquet_submit_status=0
     "${SPARK_HOME}/bin/spark-submit" \
@@ -213,7 +214,6 @@ else
       --deploy-mode client \
       --jars "$AWS_S3_JARS" \
       --properties-file "${SPARK_DEFAULTS_CONF}" \
-      --conf spark.sql.adaptive.enabled=true \
       "$EXECUTION_SCRIPT" || _parquet_submit_status=$?
   else
     _parquet_submit_status=0
@@ -221,7 +221,6 @@ else
       --master "${SPARK_MASTER}" \
       --deploy-mode client \
       --properties-file "${SPARK_DEFAULTS_CONF}" \
-      --conf spark.sql.adaptive.enabled=true \
       "$EXECUTION_SCRIPT" || _parquet_submit_status=$?
   fi
   if [[ "${_parquet_submit_status:-0}" -eq 0 ]]; then

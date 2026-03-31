@@ -93,11 +93,11 @@ HUDI_VERSION_SUFFIX=$(echo "$TARGET_HUDI_VERSION" | sed 's/-.*//' | cut -d. -f1,
 IS_LOGICAL_TIMESTAMP_ENABLED=${IS_LOGICAL_TIMESTAMP_ENABLED:-true}
 BASE_TABLE_NAME=${BASE_TABLE_NAME:-hudi_regular}
 
-# Schema file:
-# - IS_LOGICAL_TIMESTAMP_ENABLED=true  -> use SCHEMA_FILE (default: scripts/full_schema.avsc)
-# - IS_LOGICAL_TIMESTAMP_ENABLED=false -> use full_schema_no_lts_string_ts.avsc (ts_micros_*/ts_millis_* as string)
-_schema_effective="${SCHEMA_FILE:-${SCRIPT_DIR}/scripts/lts_schema.avsc}"
-if [[ "$IS_LOGICAL_TIMESTAMP_ENABLED" != true ]]; then
+# Avro schema (not in common.properties): defaults next to this repo's scripts/.
+# Optional env overrides: SCHEMA_FILE (LTS), SCHEMA_FILE_NO_LTS_STRING_TS (non-LTS).
+if [[ "$IS_LOGICAL_TIMESTAMP_ENABLED" == true ]]; then
+  _schema_effective="${SCHEMA_FILE:-${SCRIPT_DIR}/scripts/lts_schema.avsc}"
+else
   _schema_effective="${SCHEMA_FILE_NO_LTS_STRING_TS:-${SCRIPT_DIR}/scripts/non_lts_schema.avsc}"
 fi
 SCHEMA_FILE_ARG="$_schema_effective"
@@ -162,6 +162,7 @@ log_info "TABLE_TYPE      : $TABLE_TYPE"
 log_info "TABLE_NAME      : $TABLE_NAME"
 log_info "TABLE_BASE_PATH : $TABLE_BASE_PATH"
 log_info "SOURCE_DATA     : $SOURCE_DATA"
+log_info "Schema (Avro)   : $_schema_effective"
 log_info "Streamer root   : $STREAMER_SOURCE_ROOT"
 log_info "HUDI_JARS       : $HUDI_JARS"
 log_info "$(log_equal)"

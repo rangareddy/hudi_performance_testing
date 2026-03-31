@@ -81,7 +81,7 @@ load_config() {
 
   if [[ -z "${SPARK_MASTER:-}" ]]; then
     if [[ "${IS_LOCAL_RUN:-false}" == "true" ]]; then
-      export SPARK_MASTER="local[3]"
+      export SPARK_MASTER="local[4]"
     else
       export SPARK_MASTER="yarn"
     fi

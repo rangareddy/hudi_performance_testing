@@ -149,7 +149,6 @@ log_info "${SPARK_HOME}"/bin/spark-submit \
   --conf "spark.serializer=org.apache.spark.serializer.KryoSerializer" \
   --conf "spark.sql.catalog.spark_catalog=org.apache.spark.sql.hudi.catalog.HoodieCatalog" \
   --conf "spark.sql.extensions=org.apache.spark.sql.hudi.HoodieSparkSessionExtension" \
-  --conf "spark.sql.adaptive.enabled=true" \
   "$PY_SCRIPT" \
   "$BENCH_DATA_PATH"
 log_hipen
@@ -162,7 +161,6 @@ if "${SPARK_HOME}"/bin/spark-submit \
   --conf "spark.serializer=org.apache.spark.serializer.KryoSerializer" \
   --conf "spark.sql.catalog.spark_catalog=org.apache.spark.sql.hudi.catalog.HoodieCatalog" \
   --conf "spark.sql.extensions=org.apache.spark.sql.hudi.HoodieSparkSessionExtension" \
-  --conf "spark.sql.adaptive.enabled=true" \
   "$PY_SCRIPT" \
   "$BENCH_DATA_PATH"
 then
