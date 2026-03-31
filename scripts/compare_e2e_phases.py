@@ -328,14 +328,20 @@ def build_per_batch_detail(
             }
         )
 
-    for bid in batch_ids:
-        bl = batch_label(bid)
+    # COW / MOR: one pre-compaction (or sole) read in benchmark CSV at batch_id 0.
+    if tt_short == "COW":
+        read_specs: List[Tuple[int, str]] = [(0, "Full table read")]
+    elif tt_short == "MOR":
+        read_specs = [(0, "Read before compaction")]
+    else:
+        read_specs = [(bid, batch_label(bid)) for bid in batch_ids]
+
+    for bid, bl in read_specs:
         hb = bid in r_base
         he = bid in r_exp
         wb, cb = r_base[bid] if hb else (float("nan"), 0)
         we, ce = r_exp[bid] if he else (float("nan"), 0)
         cnt = (ce or cb) if (hb or he) else 0
-        # Read rows: benchmark count only.
         size_count_read = str(cnt)
         if not hb or not he:
             diff_s = ""

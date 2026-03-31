@@ -3,14 +3,16 @@
 # End-to-end Hudi performance test (two phases, then comparison):
 #   Baseline: 5 batches — Hudi ingestion always uses SOURCE_HUDI_VERSION.
 #   Experiment: 5 batches — batches 0–2 use SOURCE_HUDI_VERSION, batches 3–4 use TARGET_HUDI_VERSION.
-#   Each batch: parquet → Hudi ingestion → read benchmark (baseline benchmarks use SOURCE_HUDI_VERSION jars only; experiment uses TARGET_HUDI_VERSION only).
+#   Each batch: parquet → Hudi ingestion (all 5 batches complete first).
+#   COPY_ON_WRITE: one read benchmark after all ingests (full table).
+#   MERGE_ON_READ: read benchmark before compaction, then compaction, then read benchmark again (post-compaction CSV).
 #   Baseline and experiment use separate Hudi table paths (--table-name-suffix baseline|experiment).
-#   MERGE_ON_READ: after 5 batches, run compaction then read benchmark again (post-compaction CSV).
 #   After both phases: compare write + read performance (reports + S3).
 #
 # State (two levels, one file per phase under .e2e_state/, mirrored to S3):
 #   1) Phase:   phase_completeness=success — entire phase done; skip all its steps unless --force.
 #   2) Batch/stage: step<idx>_<job>_<batchId>_<kind>=success|failure — parquet / hudi / benchmark (and mor_* for MOR).
+#      After ingest: one read step (COW/MOR); MOR adds mor_<phase>_compaction and mor_<phase>_benchmark_post_compact.
 #
 # Usage:
 #   bash run_e2e_performance_test.sh --table-type COPY_ON_WRITE
@@ -141,7 +143,9 @@ log_info "  E2E Hudi Performance Test"
 log_info "  Table type          : $TABLE_TYPE"
 log_info "  Source Hudi version : $SOURCE_HUDI_VERSION"
 log_info "  Target Hudi version : $TARGET_HUDI_VERSION"
-log_info "  Phases              : baseline (5 batches, all SOURCE) then experiment (5 batches, 0-2 SOURCE, 3-4 TARGET)"
+log_info "  Phases              : baseline (5 ingest + one read) then experiment (5 ingest, 0-2 SOURCE / 3-4 TARGET + one read)"
+log_info "  COW                 : single full-table read after all ingests"
+log_info "  MOR                 : read before compaction, then compaction, then post-compaction read"
 log_equal
 
 get_step_status() {
@@ -276,7 +280,11 @@ run_e2e_phase() {
   else
     log_info "  Hudi ingestion: SOURCE (${SOURCE_HUDI_VERSION}) for batches 0–2; TARGET (${TARGET_HUDI_VERSION}) for batches 3–4"
   fi
-  log_info "  Read benchmarks: ${BENCH_HUDI_VERSIONS} (spark-submit Hudi bundle for this phase)"
+  if [[ "$TABLE_TYPE" == "COPY_ON_WRITE" ]]; then
+    log_info "  Read benchmark: one full-table run (${BENCH_HUDI_VERSIONS})"
+  else
+    log_info "  Read benchmarks: before compaction + after compaction (${BENCH_HUDI_VERSIONS})"
+  fi
   log_equal
 
   if [[ "${IS_LOCAL_RUN:-false}" != "true" ]]; then
@@ -300,10 +308,11 @@ run_e2e_phase() {
 
   local step_num=0
   local TOTAL_BATCHES=5
-  local TOTAL_BATCH_STEPS=$((TOTAL_BATCHES * 3))
-  local PHASE_TOTAL_STEPS=$TOTAL_BATCH_STEPS
+  # Ingest: 2 steps per batch; then one read benchmark; MOR adds compaction + post-compact read.
+  local INGEST_STEPS=$((TOTAL_BATCHES * 2))
+  local PHASE_TOTAL_STEPS=$((INGEST_STEPS + 1))
   if [[ "$TABLE_TYPE" == "MERGE_ON_READ" ]]; then
-    PHASE_TOTAL_STEPS=$((TOTAL_BATCH_STEPS + 2))
+    PHASE_TOTAL_STEPS=$((PHASE_TOTAL_STEPS + 2))
   fi
   local BATCH_ID
   local job_type
@@ -330,29 +339,19 @@ run_e2e_phase() {
     fi
 
     step_num=$((step_num + 1))
-    run_step "step${step_num}_${job_type}_${BATCH_ID}_parquet" "[${phase}] Step ${step_num}/${TOTAL_BATCH_STEPS}: ${job_type} batch $BATCH_ID - parquet" \
+    run_step "step${step_num}_${job_type}_${BATCH_ID}_parquet" "[${phase}] Step ${step_num}/${PHASE_TOTAL_STEPS}: ${job_type} batch $BATCH_ID - parquet" \
     bash "${SCRIPT_DIR}/run_parquet_ingestion.sh" \
       --type $job_type \
       --batch-id $BATCH_ID
 
     step_num=$((step_num + 1))
-    run_step "step${step_num}_${job_type}_${BATCH_ID}_hudi" "[${phase}] Step ${step_num}/${TOTAL_BATCH_STEPS}: Hudi ${job_type} (${run_hudi_version}) batch $BATCH_ID" \
+    run_step "step${step_num}_${job_type}_${BATCH_ID}_hudi" "[${phase}] Step ${step_num}/${PHASE_TOTAL_STEPS}: Hudi ${job_type} (${run_hudi_version}) batch $BATCH_ID" \
     bash "${SCRIPT_DIR}/run_hudi_ingestion.sh" \
       --table-type "$TABLE_TYPE" \
       --target-hudi-version "$run_hudi_version" \
       --batch-id $BATCH_ID \
       --table-name-suffix "$phase"
 
-    step_num=$((step_num + 1))
-    run_step "step${step_num}_${job_type}_${BATCH_ID}_benchmark" "[${phase}] Step ${step_num}/${TOTAL_BATCH_STEPS}: Benchmark batch $BATCH_ID (${BENCH_HUDI_VERSIONS})" \
-    python3 "${SCRIPT_DIR}/run_benchmark_suite.py" \
-      --table-type "$TABLE_TYPE" \
-      --hudi-versions "$BENCH_HUDI_VERSIONS" \
-      --batch-id $BATCH_ID \
-      --table-name-suffix "$phase" \
-      --output "$BENCHMARK_CSV_PATH"
-
-    upload_benchmark_csv_to_s3
     upload_write_perf_csv_to_s3
 
     end_time=$(date +%s)
@@ -363,9 +362,30 @@ run_e2e_phase() {
       duration_formatted=$(date -u -d "@$duration" +%H:%M:%S 2>/dev/null || echo "${duration}s")
     fi
 
-    log_info "[${phase}] Batch $BATCH_ID completed in $duration_formatted"
+    log_info "[${phase}] Batch $BATCH_ID ingest (parquet + Hudi) completed in $duration_formatted"
     log_info "$(log_hipen)"
   done
+
+  step_num=$((step_num + 1))
+  if [[ "$TABLE_TYPE" == "COPY_ON_WRITE" ]]; then
+    run_step "step${step_num}_post_ingest_read" "[${phase}] Step ${step_num}/${PHASE_TOTAL_STEPS}: Full-table read benchmark (${BENCH_HUDI_VERSIONS})" \
+      python3 "${SCRIPT_DIR}/run_benchmark_suite.py" \
+        --table-type "$TABLE_TYPE" \
+        --hudi-versions "$BENCH_HUDI_VERSIONS" \
+        --batch-id 0 \
+        --table-name-suffix "$phase" \
+        --output "$BENCHMARK_CSV_PATH"
+  else
+    run_step "step${step_num}_read_before_compact" "[${phase}] Step ${step_num}/${PHASE_TOTAL_STEPS}: MOR read benchmark before compaction (${BENCH_HUDI_VERSIONS})" \
+      python3 "${SCRIPT_DIR}/run_benchmark_suite.py" \
+        --table-type "$TABLE_TYPE" \
+        --hudi-versions "$BENCH_HUDI_VERSIONS" \
+        --batch-id 0 \
+        --table-name-suffix "$phase" \
+        --output "$BENCHMARK_CSV_PATH"
+  fi
+  upload_benchmark_csv_to_s3
+  upload_write_perf_csv_to_s3
 
   if [[ "$TABLE_TYPE" == "MERGE_ON_READ" ]]; then
     local compact_version
@@ -402,7 +422,7 @@ run_e2e_phase() {
 
 if [[ "$DRY_RUN" == true ]]; then
   log_echo ""
-  log_echo "[DRY RUN] Would execute: baseline (5 batches), experiment (5 batches), then comparison report"
+  log_echo "[DRY RUN] Would execute: baseline (5 ingest + 1 read [+ MOR compact + post-read]), experiment same, then comparison report"
 fi
 
 run_e2e_phase baseline
