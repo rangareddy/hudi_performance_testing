@@ -123,7 +123,7 @@ val df = spark.createDataFrame(data, schema)
 println(s"✅ Successfully generated DataFrame with ${numCols} columns, ${totalRecords} total records (${numRecordsPerPartition} per partition key, ${numPartitions} keys).")
 
 println(s"📝 Writing data to $outputPath")
-val safeRowsPerTask = 5000
+val safeRowsPerTask = 50000
 val dynamicRepartition = math.max(1, (totalRecords / safeRowsPerTask).toInt)
 df.repartition(dynamicRepartition, $"partition_col")
   .write
