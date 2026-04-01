@@ -3,9 +3,10 @@
 Run Hudi read benchmarks for multiple table types and Hudi versions, then write results to CSV.
 Each run increments a persistent sequence number (how many times this script has been run).
 
-Iteration count comes from env READ_PERFORMANCE_ITERATIONS (exported from common.properties) or from
-scripts/common.properties, default 1. Each (hudi_version, iteration) produces
-one CSV row with an iteration column.
+Iteration count: from env READ_PERFORMANCE_ITERATIONS / scripts/common.properties when running standalone
+with --iterations (one process loops and allocates one run_sequence). E2E calls this script once per
+iteration with --iteration K --run-sequence S (from --allocate-run-sequence-only) so iterations are
+driven from run_e2e_performance_test.sh. Each (hudi_version, iteration) produces one CSV row.
 
 Usage:
   python run_benchmark_suite.py \
@@ -183,6 +184,10 @@ def run_benchmark(
 
 
 def main() -> int:
+    if len(sys.argv) >= 2 and sys.argv[1] == "--allocate-run-sequence-only":
+        print(read_and_increment_sequence())
+        return 0
+
     parser = argparse.ArgumentParser(
         description="Run Hudi benchmarks for multiple Hudi versions, write results to CSV with run sequence.",
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
@@ -221,7 +226,20 @@ def main() -> int:
         "--iterations",
         type=int,
         default=None,
-        help="Override READ_PERFORMANCE_ITERATIONS (default: env or common.properties, min 1).",
+        help="When --run-sequence is omitted: run this many iterations in-process (default: env READ_PERFORMANCE_ITERATIONS or common.properties, min 1). Ignored if --run-sequence is set.",
+    )
+    parser.add_argument(
+        "--run-sequence",
+        type=int,
+        default=None,
+        dest="run_sequence",
+        help="Fixed run_sequence for CSV; do not bump benchmark_run_sequence.txt. Use with --iteration from E2E.",
+    )
+    parser.add_argument(
+        "--iteration",
+        type=int,
+        default=1,
+        help="Iteration index written to CSV (default 1). Used with --run-sequence from E2E; must be >= 1.",
     )
 
     args = parser.parse_args()
@@ -232,8 +250,18 @@ def main() -> int:
         print("❌ Error: --table-type is required", file=sys.stderr)
         return 1
     hudi_versions = [v.strip() for v in args.hudi_versions.split(",") if v.strip()]
-    iterations = read_iteration_count(args.iterations)
-    run_sequence = read_and_increment_sequence()
+    if args.iteration < 1:
+        print("❌ Error: --iteration must be >= 1", file=sys.stderr)
+        return 1
+
+    if args.run_sequence is not None:
+        run_sequence = args.run_sequence
+        iterations_list = [args.iteration]
+    else:
+        run_sequence = read_and_increment_sequence()
+        iterations_list = list(range(1, read_iteration_count(args.iterations) + 1))
+
+    n_iter_label = len(iterations_list)
     batch_id = args.batch_id
     output_path = Path(args.output)
     if not output_path.is_absolute():
@@ -243,11 +271,11 @@ def main() -> int:
     new_rows: List[Dict[str, Any]] = []
     any_failed = False
 
-    for hudi_version in hudi_versions:
-        for iteration in range(1, iterations + 1):
+    for iteration in iterations_list:
+        for hudi_version in hudi_versions:
             ts_utc = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
             print(
-                f"[Run #{run_sequence}] iteration {iteration}/{iterations} "
+                f"[Run #{run_sequence}] iteration {iteration}/{n_iter_label} "
                 f"{args.table_type} @ {hudi_version} ...",
                 flush=True,
             )
@@ -256,8 +284,12 @@ def main() -> int:
                 args.table_type, hudi_version, batch_id, args.table_name_suffix
             )
             t1 = time.time()
-            start_str = datetime.fromtimestamp(t0).strftime("%Y-%m-%d %H:%M:%S")
-            end_str = datetime.fromtimestamp(t1).strftime("%Y-%m-%d %H:%M:%S")
+            start_str = datetime.fromtimestamp(t0, tz=timezone.utc).strftime(
+                "%Y-%m-%d %H:%M:%S UTC"
+            )
+            end_str = datetime.fromtimestamp(t1, tz=timezone.utc).strftime(
+                "%Y-%m-%d %H:%M:%S UTC"
+            )
             row = {
                 "run_sequence": run_sequence,
                 "table_type": args.table_type,
@@ -275,14 +307,17 @@ def main() -> int:
             if status != "ok":
                 any_failed = True
             if exec_time is not None and count is not None:
-                print(f"  -> {exec_time:.2f}s, count={count}, status={status}")
+                print(
+                    f"  -> iteration={iteration} time={exec_time:.2f}s count={count} status={status}",
+                    flush=True,
+                )
             else:
-                print(f"  -> status={status}")
+                print(f"  -> iteration={iteration} status={status}", flush=True)
 
     write_benchmark_csv(output_path, existing + new_rows)
 
     print(f"\nRun sequence for this suite: {run_sequence}")
-    print(f"Iterations per version: {iterations}")
+    print(f"Iterations in this invocation: {n_iter_label} (indices {iterations_list})")
     print(f"Results written to: {output_path}")
     return 1 if any_failed else 0
 

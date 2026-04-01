@@ -299,13 +299,44 @@ def load_read_by_batch(path: Path) -> Dict[int, Tuple[float, int]]:
     return {k: (v[2], v[3]) for k, v in best.items()}
 
 
-def sum_read_seconds(path: Path) -> Tuple[float, int]:
+def sum_read_seconds(
+    path: Path,
+    *,
+    only_batch_ids: Optional[Tuple[int, ...]] = None,
+    exclude_batch_ids: Optional[Tuple[int, ...]] = None,
+) -> Tuple[float, int]:
     """Sum execution_time_seconds over batch_ids using the same best-row rule as load_read_by_batch."""
     by_batch = load_read_by_batch(path)
+    if only_batch_ids is not None:
+        allow = set(only_batch_ids)
+        by_batch = {k: v for k, v in by_batch.items() if k in allow}
+    if exclude_batch_ids is not None:
+        ex = set(exclude_batch_ids)
+        by_batch = {k: v for k, v in by_batch.items() if k not in ex}
     if not by_batch:
         return 0.0, 0
     total = sum(sec for sec, _ in by_batch.values())
     return total, len(by_batch)
+
+
+def _uses_legacy_split_post_compact_csvs(
+    baseline_read: Path,
+    experiment_read: Path,
+    baseline_read_post: Optional[Path],
+    experiment_read_post: Optional[Path],
+) -> bool:
+    if baseline_read_post is None or experiment_read_post is None:
+        return False
+    if not baseline_read_post.is_file() or not experiment_read_post.is_file():
+        return False
+    try:
+        if baseline_read_post.resolve() == baseline_read.resolve():
+            return False
+        if experiment_read_post.resolve() == experiment_read.resolve():
+            return False
+    except OSError:
+        return False
+    return True
 
 
 def table_type_from_read_csv(path: Path) -> str:
@@ -422,15 +453,20 @@ def build_per_batch_detail(
             }
         )
 
-    # Optional post-compaction read (single logical step, e.g. batch_id 5)
-    if (
-        baseline_read_post
-        and experiment_read_post
-        and baseline_read_post.is_file()
-        and experiment_read_post.is_file()
+    # Post-compaction read (batch_id 5): legacy *_post_compact.csv pair, or same rows in main read CSV.
+    if _uses_legacy_split_post_compact_csvs(
+        baseline_read,
+        experiment_read,
+        baseline_read_post,
+        experiment_read_post,
     ):
-        rpb = load_read_by_batch(baseline_read_post)
-        rpe = load_read_by_batch(experiment_read_post)
+        rpb = load_read_by_batch(baseline_read_post)  # type: ignore[arg-type]
+        rpe = load_read_by_batch(experiment_read_post)  # type: ignore[arg-type]
+    else:
+        rpb = {5: r_base[5]} if 5 in r_base else {}
+        rpe = {5: r_exp[5]} if 5 in r_exp else {}
+
+    if rpb or rpe:
         post_ids = sorted(set(rpb.keys()) | set(rpe.keys()))
         for bid in post_ids:
             label = f"Post-compaction (batch_id {bid})" if bid != 5 else "Post-compaction read"
@@ -530,8 +566,9 @@ def build_summary_rows(
 ) -> List[Dict[str, str]]:
     rows: List[Dict[str, str]] = []
 
-    br, br_n = sum_read_seconds(baseline_read)
-    er, er_n = sum_read_seconds(experiment_read)
+    # batch_id 5 = MOR post-compaction read when merged into the same CSV as pre-compact (batch 0).
+    br, br_n = sum_read_seconds(baseline_read, exclude_batch_ids=(5,))
+    er, er_n = sum_read_seconds(experiment_read, exclude_batch_ids=(5,))
     rows.append(
         {
             "metric": "read_benchmark_total_seconds",
@@ -604,26 +641,37 @@ def build_summary_rows(
         }
     )
 
-    if baseline_read_post and experiment_read_post:
-        if baseline_read_post.is_file() and experiment_read_post.is_file():
-            bpr, bpr_n = sum_read_seconds(baseline_read_post)
-            epr, epr_n = sum_read_seconds(experiment_read_post)
-            rows.append(
-                {
-                    "metric": "read_benchmark_post_compaction_total_seconds",
-                    "baseline_value": f"{bpr:.4f}",
-                    "experiment_value": f"{epr:.4f}",
-                    "delta_seconds": f"{epr - bpr:.4f}",
-                    "delta_percent": pct_delta(bpr, epr),
-                    "baseline_row_count_ok": str(bpr_n),
-                    "experiment_row_count_ok": str(epr_n),
-                }
-            )
-        else:
-            print(
-                "Note: post-compaction read CSVs not found; skipping read_benchmark_post_compaction_total_seconds",
-                file=sys.stderr,
-            )
+    if _uses_legacy_split_post_compact_csvs(
+        baseline_read,
+        experiment_read,
+        baseline_read_post,
+        experiment_read_post,
+    ):
+        bpr, bpr_n = sum_read_seconds(baseline_read_post)  # type: ignore[arg-type]
+        epr, epr_n = sum_read_seconds(experiment_read_post)  # type: ignore[arg-type]
+        post_ok = bpr_n > 0 and epr_n > 0
+    else:
+        bpr, bpr_n = sum_read_seconds(baseline_read, only_batch_ids=(5,))
+        epr, epr_n = sum_read_seconds(experiment_read, only_batch_ids=(5,))
+        post_ok = bpr_n > 0 and epr_n > 0
+
+    if post_ok:
+        rows.append(
+            {
+                "metric": "read_benchmark_post_compaction_total_seconds",
+                "baseline_value": f"{bpr:.4f}",
+                "experiment_value": f"{epr:.4f}",
+                "delta_seconds": f"{epr - bpr:.4f}",
+                "delta_percent": pct_delta(bpr, epr),
+                "baseline_row_count_ok": str(bpr_n),
+                "experiment_row_count_ok": str(epr_n),
+            }
+        )
+    elif table_type_from_read_csv(baseline_read) == "MERGE_ON_READ":
+        print(
+            "Note: no post-compaction read (batch_id 5) in read CSVs; skipping read_benchmark_post_compaction_total_seconds",
+            file=sys.stderr,
+        )
 
     return rows
 
@@ -799,13 +847,13 @@ def main() -> int:
         "--baseline-read-post",
         type=Path,
         default=None,
-        help="Optional MOR post-compaction read benchmark CSV (baseline phase).",
+        help="Legacy only: separate baseline post-compaction read CSV. New E2E appends batch_id=5 rows to the main read CSV.",
     )
     p.add_argument(
         "--experiment-read-post",
         type=Path,
         default=None,
-        help="Optional MOR post-compaction read benchmark CSV (experiment phase).",
+        help="Legacy only: separate experiment post-compaction read CSV.",
     )
     p.add_argument(
         "--initial-batch-size",

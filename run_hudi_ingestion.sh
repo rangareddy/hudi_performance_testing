@@ -242,6 +242,7 @@ if time "${SPARK_HOME}/bin/spark-submit" \
   --hoodie-conf hoodie.datasource.write.precombine.field=col_1 \
   --hoodie-conf hoodie.datasource.write.partitionpath.field=partition_col \
   --hoodie-conf hoodie.parquet.small.file.limit=-1 \
+  --hoodie-conf hoodie.compact.inline.max.delta.commits=20 \
   --hoodie-conf hoodie.compact.inline=false \
   --hoodie-conf hoodie.compact.async.enabled=false
 then

@@ -25,26 +25,33 @@ _format_elapsed() {
 }
 
 _print_total_time() {
-  local end_ts dur
+  local end_ts dur fmt
   end_ts=$(date +%s)
   dur=$((end_ts - START_TS))
-  echo "Total wall time (run_e2e_performance_test_all.sh): $(_format_elapsed "$dur") (${dur}s)"
+  fmt=$(_format_elapsed "$dur")
+  echo "=============================================================================" >&2
+  echo "Total wall time (run_e2e_performance_test_all.sh): ${fmt} (${dur}s)" >&2
+  echo "=============================================================================" >&2
 }
 
 trap _print_total_time EXIT
 
+ALL_EXIT=0
+
 echo "Running end to end performance test for COPY_ON_WRITE table type"
-bash $SCRIPT_DIR/run_e2e_performance_test.sh --table-type COPY_ON_WRITE
-if [[ $? -ne 0 ]]; then
-  echo "Error: run_e2e_performance_test.sh --table-type COPY_ON_WRITE failed"
-else
+if bash "$SCRIPT_DIR/run_e2e_performance_test.sh" --table-type COPY_ON_WRITE; then
   echo "Success: run_e2e_performance_test.sh --table-type COPY_ON_WRITE succeeded"
+else
+  echo "Error: run_e2e_performance_test.sh --table-type COPY_ON_WRITE failed" >&2
+  ALL_EXIT=1
 fi
 
 echo "Running end to end performance test for MERGE_ON_READ table type"
-bash $SCRIPT_DIR/run_e2e_performance_test.sh --table-type MERGE_ON_READ
-if [[ $? -ne 0 ]]; then
-  echo "Error: run_e2e_performance_test.sh --table-type MERGE_ON_READ failed"
-else
+if bash "$SCRIPT_DIR/run_e2e_performance_test.sh" --table-type MERGE_ON_READ; then
   echo "Success: run_e2e_performance_test.sh --table-type MERGE_ON_READ succeeded"
+else
+  echo "Error: run_e2e_performance_test.sh --table-type MERGE_ON_READ failed" >&2
+  ALL_EXIT=1
 fi
+
+exit "$ALL_EXIT"

@@ -133,6 +133,16 @@ println(s"📍 Data written to: ${outputPath}")
 df.printSchema()
 df.show(1, false)
 
+val output_count = spark.read.parquet(outputPath).count()
+
+if (output_count != totalRecords) {
+    // Added 's' for interpolation and switched to println for a new line
+    println(s"Count mismatch for initial data generation. Expected Count: $totalRecords and Actual Count: $output_count")
+    System.exit(1)
+} else {
+    println(s"Validation successful: $output_count records verified.")
+}
+
 // Stop the spark session
 spark.stop()
 

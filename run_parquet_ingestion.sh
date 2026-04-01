@@ -75,8 +75,10 @@ if [[ "$INGESTION_TYPE" != "initial" ]] && [[ "$INGESTION_TYPE" != "incremental"
   exit 1
 fi
 
-# Convert ingestion type to title case means first letter is upper case and remainig lower case
-INGESTION_TYPE_TITLE=$(echo "$INGESTION_TYPE" | sed 's/.*/\u&/')
+# Title case: first letter upper, rest lower (portable; macOS sed does not support \u like GNU sed).
+_ing_lower=$(echo "$INGESTION_TYPE" | tr '[:upper:]' '[:lower:]')
+INGESTION_TYPE_TITLE="$(printf '%s' "${_ing_lower:0:1}" | tr '[:lower:]' '[:upper:]')${_ing_lower:1}"
+unset _ing_lower
 export SOURCE_DATA
 
 if [ -z "${SOURCE_DATA:-}" ]; then
