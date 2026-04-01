@@ -126,6 +126,18 @@ load_config() {
     fi
   fi
 
+  # Non-EMR: EMR uses HDFS for Spark history; local/YARN-without-HDFS needs a filesystem URI.
+  if [[ "${IS_EMR_CLUSTER:-true}" != "true" ]] && [[ -n "${SPARK_DEFAULTS_CONF:-}" && -f "$SPARK_DEFAULTS_CONF" ]]; then
+    local _spark_ev="file:///tmp/spark-events"
+    mkdir -p "/tmp/spark-events"
+    local _spark_effective="${script_dir}/.spark-defaults.effective.conf"
+    awk -v evdir="$_spark_ev" '
+      /^spark\.eventLog\.dir[[:space:]]/ { print "spark.eventLog.dir               " evdir; next }
+      { print }
+    ' "$SPARK_DEFAULTS_CONF" > "$_spark_effective"
+    export SPARK_DEFAULTS_CONF="$_spark_effective"
+  fi
+
   HADOOP_CONF_DIR=${HADOOP_CONF_DIR:-''}
   if [ -z "$HADOOP_CONF_DIR" ]; then
     export HADOOP_CONF_DIR=/etc/hadoop/conf

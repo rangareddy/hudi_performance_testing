@@ -28,6 +28,7 @@ replay_pid*
 .pycache
 .DS_Store
 scripts/.DS_Store
+scripts/.spark-defaults.effective.conf
 
 jars/
 data/
