@@ -80,10 +80,7 @@
       "name": "col_9",
       "type": [
         "null",
-        {
-          "type": "long",
-          "logicalType": "timestamp-micros"
-        }
+        "string"
       ],
       "default": null
     },

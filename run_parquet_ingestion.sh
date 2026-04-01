@@ -202,8 +202,11 @@ else
     export BATCH_ID=$BATCH_ID
   fi
   export NUM_OF_RECORDS_TO_UPDATE=${NUM_OF_RECORDS_TO_UPDATE:-100}
+  export NUM_OF_RECORDS_PER_PARTITION=${NUM_OF_RECORDS_PER_PARTITION:-1}
+  export NUM_OF_PARTITIONS=${NUM_OF_PARTITIONS:-2000}
   export SOURCE_DATA="${SOURCE_DATA}/batch_0"
   log_info "Records to update per batch: ${NUM_OF_RECORDS_TO_UPDATE}"
+  log_info "NUM_OF_RECORDS_PER_PARTITION: ${NUM_OF_RECORDS_PER_PARTITION} (incremental scope when > 1)"
   _wp_start=$(date +%s)
   log_info "Executing Command:"
   echo "${SPARK_HOME}/bin/spark-submit --master ${SPARK_MASTER} --deploy-mode client${_PARQUET_JARS_ECHO} --properties-file ${SPARK_DEFAULTS_CONF} $EXECUTION_SCRIPT"

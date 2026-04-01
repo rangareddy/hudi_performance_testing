@@ -15,7 +15,7 @@ import spark.implicits._
 val batchId: Int = sys.env.get("BATCH_ID").map(_.toInt).getOrElse(0)
 val numCols = sys.env.get("NUM_OF_COLUMNS").map(_.toInt).getOrElse(500)
 val numPartitions = sys.env.get("NUM_OF_PARTITIONS").map(_.toInt).getOrElse(10000)
-val numRecords = sys.env.get("NUM_OF_RECORDS").map(_.toInt).getOrElse(numPartitions)
+val numRecordsPerPartition = sys.env.get("NUM_OF_RECORDS_PER_PARTITION").map(_.toInt).getOrElse(1000)
 
 val DEFAULT_TARGET="s3://performance-benchmark-datasets-us-west-2/hudi-bench/performance/logical_ts_perf/data/wide_500cols_10000parts"
 val outputPath = sys.env.getOrElse("TARGET_DATA", DEFAULT_TARGET)
@@ -39,7 +39,7 @@ val firstTenTypes = Seq(
   DoubleType,
   DecimalType(18,2),
   DateType,
-  TimestampType,
+  StringType,
   StringType
 )
 
@@ -69,7 +69,7 @@ val schema = StructType(fields)
 // ----------------------------------------------------------------------
 println(s"🚀 Starting data generation")
 println(s"Batch ID: $batchId")
-println(s"Columns: $numCols  Partitions: $numPartitions  Records: $numRecords")
+println(s"Columns: $numCols  Partitions: $numPartitions  Records: $numRecordsPerPartition")
 println(s"Logical Timestamp Enabled: $enableLogicalTs")
 
 // Configuration for 2,000 partitions with 100 records each
@@ -97,8 +97,6 @@ val data = spark.sparkContext.parallelize(1 to totalRecords, numPartitions).map 
           new BigDecimal(i * colIdx * 0.1)
         case DateType =>
           Date.valueOf(baseTime.toLocalDate.plusDays(i))
-        case TimestampType =>
-          toTimestamp(localTs)
       }
     } else if (enableLogicalTs && colIdx % 50 == 0) {
       // Logical Timestamp Logic
@@ -122,11 +120,11 @@ val data = spark.sparkContext.parallelize(1 to totalRecords, numPartitions).map 
 // Create DataFrame
 // ----------------------------------------------------------------------
 val df = spark.createDataFrame(data, schema)
-println(s"✅ Successfully generated DataFrame with ${numCols} columns, ${numRecords} records, and ${numPartitions} partitions.")
+println(s"✅ Successfully generated DataFrame with ${numCols} columns, ${totalRecords} total records (${numRecordsPerPartition} per partition key, ${numPartitions} keys).")
 
 println(s"📝 Writing data to $outputPath")
-val num_of_repartitions = if (numRecords < 100) 1 else 10
-df.repartition(20, $"partition_col")
+val num_of_repartitions = if (numRecordsPerPartition < 100) 1 else 10
+df.repartition(num_of_repartitions, $"partition_col")
   .write
   .mode("overwrite")
   .parquet(outputPath)

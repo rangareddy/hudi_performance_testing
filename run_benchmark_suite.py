@@ -3,8 +3,8 @@
 Run Hudi read benchmarks for multiple table types and Hudi versions, then write results to CSV.
 Each run increments a persistent sequence number (how many times this script has been run).
 
-Iteration count comes from env read_performance_iterations / READ_PERFORMANCE_ITERATIONS (exported from
-common.properties) or from scripts/common.properties, default 1. Each (hudi_version, iteration) produces
+Iteration count comes from env READ_PERFORMANCE_ITERATIONS (exported from common.properties) or from
+scripts/common.properties, default 1. Each (hudi_version, iteration) produces
 one CSV row with an iteration column.
 
 Usage:
@@ -68,8 +68,8 @@ def read_iteration_count(cli_override: Optional[int]) -> int:
     if cli_override is not None and cli_override >= 1:
         return cli_override
     raw = (
-        os.environ.get("read_performance_iterations")
-        or os.environ.get("READ_PERFORMANCE_ITERATIONS")
+        os.environ.get("READ_PERFORMANCE_ITERATIONS")
+        or os.environ.get("read_performance_iterations")
         or ""
     ).strip()
     if not raw:
@@ -84,7 +84,8 @@ def read_iteration_count(cli_override: Optional[int]) -> int:
                 if not line or "=" not in line:
                     continue
                 key, _, val = line.partition("=")
-                if key.strip() == "read_performance_iterations":
+                k = key.strip()
+                if k in ("READ_PERFORMANCE_ITERATIONS", "read_performance_iterations"):
                     raw = val.strip()
                     break
     if not raw:
@@ -220,7 +221,7 @@ def main() -> int:
         "--iterations",
         type=int,
         default=None,
-        help="Override read_performance_iterations (default: env or common.properties, min 1).",
+        help="Override READ_PERFORMANCE_ITERATIONS (default: env or common.properties, min 1).",
     )
 
     args = parser.parse_args()

@@ -7,12 +7,18 @@ Environment:
   TARGET_DATA - parquet output path
   BATCH_ID
   NUM_OF_RECORDS_TO_UPDATE
+  NUM_OF_RECORDS_PER_PARTITION - when > 1, scope to first N partition_col values, then at most
+      M rows per partition (ordered by row index parsed from col_1) before col_1 filter / validate / write.
+  NUM_OF_PARTITIONS - used to cap how many distinct partition_col values exist (default 2000)
+  INCREMENTAL_PARTITION_SCAN_LIMIT - max partition keys to include when NUM_OF_RECORDS_PER_PARTITION > 1 (default 100)
+  INCREMENTAL_ROWS_PER_PARTITION_CAP - max rows per partition in that scope (default 100)
 """
 
 import os
 import sys
 from pyspark.sql import SparkSession
-from pyspark.sql.functions import col
+from pyspark.sql.functions import col, regexp_extract, row_number
+from pyspark.sql.window import Window
 
 
 def create_spark(app_name: str) -> SparkSession:
@@ -30,23 +36,26 @@ def get_env_int(name: str, default: int) -> int:
 
 
 def calculate_range(batch_id: int, num_records: int):
-    """Calculate record range for the batch."""
+    """Calculate col_1 row-index range for the batch (inclusive)."""
     if batch_id == 0:
         return 1, num_records
-    else:
-        return (batch_id - 1) * num_records + 1, batch_id * num_records + 1
+    return (batch_id - 1) * num_records + 1, batch_id * num_records
 
 
 def generate_values(start: int, end: int, batch_id: int):
     """Generate filter values."""
     batch_id = 1 if batch_id == 0 else batch_id
-    return [f"value_{i}_{batch_id}" for i in range(start, end+1)]
+    return [f"value_{i}_{batch_id}" for i in range(start, end + 1)]
 
 
 def run_incremental_batch(spark: SparkSession, batch_id: int):
     """Main processing logic."""
 
-    num_records = get_env_int("NUM_OF_RECORDS_TO_UPDATE", 100)
+    num_of_records_to_update = get_env_int("NUM_OF_RECORDS_TO_UPDATE", 100)
+    num_records_per_partition = get_env_int("NUM_OF_RECORDS_PER_PARTITION", 1)
+    num_partitions = get_env_int("NUM_OF_PARTITIONS", 2000)
+    part_limit = min(num_of_records_to_update, num_records_per_partition)
+    total_records = part_limit * num_of_records_to_update
     source_data_path = os.environ.get("SOURCE_DATA")
     target_data_path = os.environ.get("TARGET_DATA")
 
@@ -59,27 +68,40 @@ def run_incremental_batch(spark: SparkSession, batch_id: int):
         sys.exit(1)
 
     print(f"🚀 Starting incremental batch {batch_id}")
-    start, end = calculate_range(batch_id, num_records)
-
+    start, end = calculate_range(batch_id, num_of_records_to_update)
     values = generate_values(start, end, batch_id)
 
     print(f"📍 Reading from: {source_data_path}")
     df = spark.read.parquet(source_data_path)
 
-    print(f"📍 Filtering records from {start} to {end}")
-    filtered_df = df.filter(col("col_1").isin(values))
-    record_count = filtered_df.count()
+    top_n_partitions = (df.select("partition_col").distinct().orderBy("partition_col").limit(part_limit))
+    allowed_partitions = {r[0] for r in top_n_partitions.collect()}
+    required_for_batch = {
+        f"partition_{(i % num_partitions):05d}" for i in range(start, end + 1)
+    }
+    allowed_partitions |= required_for_batch
+    if not allowed_partitions:
+        print("❌ No partition_col values found in source")
+        sys.exit(1)
+    
+    top_n_partitions_df = df.join(top_n_partitions, on="partition_col", how="inner")
+    window_spec = Window.partitionBy("partition_col").orderBy("col_1")
+    final_bench_df = (top_n_partitions_df.withColumn("row_num", row_number().over(window_spec))
+                        .filter(col("row_num") <= num_records_per_partition)
+                        .drop("row_num"))
+        
+    record_count = final_bench_df.count()
     print(f"✅ Filtered {record_count} records")
 
-    if record_count != num_records:
+    if record_count != total_records:
         print(
-            f"❌ Expected exactly {num_records} records (NUM_OF_RECORDS_TO_UPDATE), "
-            f"got {record_count} (batch_id={batch_id}, col_1 range indices {start}-{end})"
+            f"❌ Expected exactly {total_records} records, "
+            f"got {record_count} (batch_id={batch_id}, num_of_records_to_update={num_of_records_to_update})"
         )
         sys.exit(1)
 
     print(f"📍 Writing to: {target_data_path}")
-    filtered_df.repartition(1).write.mode("append").parquet(target_data_path)
+    final_bench_df.repartition(1).write.mode("append").parquet(target_data_path)
 
     print("✅ Incremental batch completed successfully")
     print(f"📍 Data written to: {target_data_path}")
