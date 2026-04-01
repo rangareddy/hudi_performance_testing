@@ -91,11 +91,24 @@ load_config() {
   [[ -z "${JARS_PATH:-}" && -n "${BASE_PATH:-}" ]] && export JARS_PATH="${BASE_PATH}/jars"
   [[ -z "${DATA_PATH:-}" && -n "${BASE_PATH:-}" ]] && export DATA_PATH="${BASE_PATH}/data"
 
+  export NUM_OF_COLUMNS="${NUM_OF_COLUMNS:-500}"
+  export NUM_OF_PARTITIONS="${NUM_OF_PARTITIONS:-2000}"
+  export NUM_OF_RECORDS_PER_PARTITION="${NUM_OF_RECORDS_PER_PARTITION:-1}"
+  export DATA_SHAPE_TAG="${NUM_OF_COLUMNS}_${NUM_OF_PARTITIONS}_${NUM_OF_RECORDS_PER_PARTITION}"
+
+  # Isolate parquet + Hudi tables per (columns, partitions, records/partition). Set SKIP_DATA_PATH_SHAPE_SUFFIX=1 to disable.
+  if [[ "${SKIP_DATA_PATH_SHAPE_SUFFIX:-0}" != "1" ]] && [[ -n "${DATA_PATH:-}" ]]; then
+    _dp="${DATA_PATH%/}"
+    if [[ "$(basename "$_dp")" != "${DATA_SHAPE_TAG}" ]]; then
+      export DATA_PATH="${_dp}/${DATA_SHAPE_TAG}"
+    fi
+  fi
+
   if [[ -z "${SOURCE_DATA:-}" ]]; then
     if [[ "${IS_LOGICAL_TIMESTAMP_ENABLED:-true}" == "true" ]]; then
-      export SOURCE_DATA="${DATA_PATH}/wide_${NUM_OF_COLUMNS}cols_${NUM_OF_PARTITIONS}parts_lts"
+      export SOURCE_DATA="${DATA_PATH}/wide_${NUM_OF_COLUMNS}cols_${NUM_OF_PARTITIONS}parts_${NUM_OF_RECORDS_PER_PARTITION}rpp_lts"
     else
-      export SOURCE_DATA="${DATA_PATH}/wide_${NUM_OF_COLUMNS}cols_${NUM_OF_PARTITIONS}parts"
+      export SOURCE_DATA="${DATA_PATH}/wide_${NUM_OF_COLUMNS}cols_${NUM_OF_PARTITIONS}parts_${NUM_OF_RECORDS_PER_PARTITION}rpp"
     fi
   fi
 

@@ -85,19 +85,22 @@ esac
 
 TARGET_VERSION=$(echo "${TARGET_HUDI_VERSION}" | cut -d '.' -f 1,2 | tr -d '.')
 TABLE_TYPE_LOWER=$(echo "$TABLE_TYPE" | tr '[:upper:]' '[:lower:]')
-E2E_STATE_DIR="${SCRIPT_DIR}/.e2e_state"
+# DATA_SHAPE_TAG from load_config: ${NUM_OF_COLUMNS}_${NUM_OF_PARTITIONS}_${NUM_OF_RECORDS_PER_PARTITION}
+DATA_SHAPE_TAG="${DATA_SHAPE_TAG:-${NUM_OF_COLUMNS}_${NUM_OF_PARTITIONS}_${NUM_OF_RECORDS_PER_PARTITION:-1}}"
+E2E_STATE_DIR="${SCRIPT_DIR}/.e2e_state/${DATA_SHAPE_TAG}"
 S3_LOGS_DIR="${BASE_PATH}/logs"
 REPORTS_DIR="${SCRIPT_DIR}/reports"
-REPORTS_READ_DIR="${REPORTS_DIR}/read"
-REPORTS_WRITE_DIR="${REPORTS_DIR}/write"
+REPORTS_SHAPE_ROOT="${REPORTS_DIR}/${DATA_SHAPE_TAG}"
+REPORTS_READ_DIR="${REPORTS_SHAPE_ROOT}/read"
+REPORTS_WRITE_DIR="${REPORTS_SHAPE_ROOT}/write"
 # Per-phase state/sync (set in run_e2e_phase)
 E2E_STATE_FILE=""
 S3_STATE_FILE=""
 
 mkdir -p "$E2E_STATE_DIR" "$REPORTS_READ_DIR" "$REPORTS_WRITE_DIR"
 
-# Read benchmark CSV: reports/read/hudi_benchmark_results_<cow|mor>_...
-# Write performance CSV: reports/write/hudi_write_performance_<cow|mor>_...
+# Read benchmark CSV: reports/<cols>_<parts>_<rpp>/read/hudi_benchmark_results_<cow|mor>_...
+# Write performance CSV: reports/<shape>/write/hudi_write_performance_<cow|mor>_...
 if [[ "$TABLE_TYPE" == "COPY_ON_WRITE" ]]; then
   BENCHMARK_TABLE_SUFFIX="cow"
 else
@@ -117,9 +120,9 @@ BENCHMARK_VERSION_SUFFIX=$(echo $BENCHMARK_VERSION_SUFFIX | tr ' ' '_')
 [[ -z "$BENCHMARK_VERSION_SUFFIX" ]] && BENCHMARK_VERSION_SUFFIX="0_14"
 
 # Report stems (phase suffix: _baseline | _experiment added in run_e2e_phase)
-BENCHMARK_REPORT_STEM="${REPORTS_READ_DIR}/hudi_benchmark_results_${BENCHMARK_TABLE_SUFFIX}_${IS_LOGICAL_TIMESTAMP_ENABLED}_${BENCHMARK_VERSION_SUFFIX}"
-WRITE_REPORT_STEM="${REPORTS_WRITE_DIR}/hudi_write_performance_${BENCHMARK_TABLE_SUFFIX}_${IS_LOGICAL_TIMESTAMP_ENABLED}_${BENCHMARK_VERSION_SUFFIX}"
-COMPARISON_CSV="${REPORTS_DIR}/e2e_baseline_vs_experiment_${BENCHMARK_TABLE_SUFFIX}_${IS_LOGICAL_TIMESTAMP_ENABLED}_${BENCHMARK_VERSION_SUFFIX}.csv"
+BENCHMARK_REPORT_STEM="${REPORTS_READ_DIR}/hudi_benchmark_results_${BENCHMARK_TABLE_SUFFIX}_${IS_LOGICAL_TIMESTAMP_ENABLED}_${BENCHMARK_VERSION_SUFFIX}_${DATA_SHAPE_TAG}"
+WRITE_REPORT_STEM="${REPORTS_WRITE_DIR}/hudi_write_performance_${BENCHMARK_TABLE_SUFFIX}_${IS_LOGICAL_TIMESTAMP_ENABLED}_${BENCHMARK_VERSION_SUFFIX}_${DATA_SHAPE_TAG}"
+COMPARISON_CSV="${REPORTS_SHAPE_ROOT}/e2e_baseline_vs_experiment_${BENCHMARK_TABLE_SUFFIX}_${IS_LOGICAL_TIMESTAMP_ENABLED}_${BENCHMARK_VERSION_SUFFIX}_${DATA_SHAPE_TAG}.csv"
 BENCHMARK_CSV_PATH=""
 WRITE_PERF_CSV=""
 export TABLE_TYPE IS_LOGICAL_TIMESTAMP_ENABLED
@@ -132,13 +135,13 @@ fi
 export READ_PERFORMANCE_ITERATIONS="${READ_PERF_ITERATIONS}"
 export read_performance_iterations="${READ_PERF_ITERATIONS}"
 
-# Log file: logs/<YYYYMMDD>/e2e_<table>_v<ver>_<lts>.log
+# Log file: logs/<YYYYMMDD>/<cols>_<parts>_<rpp>/e2e_<table>_v<ver>_<lts>_....log
 LOG_DIR="${SCRIPT_DIR}/logs"
 LOG_RUN_ID="$(date +%Y%m%d)"
-LOG_SUBDIR="${LOG_DIR}/${LOG_RUN_ID}"
+LOG_SUBDIR="${LOG_DIR}/${LOG_RUN_ID}/${DATA_SHAPE_TAG}"
 mkdir -p "$LOG_SUBDIR"
-LOG_FILE="${LOG_SUBDIR}/e2e_${TABLE_TYPE_LOWER}_v${TARGET_VERSION}_${IS_LOGICAL_TIMESTAMP_ENABLED}.log"
-STEP_TIMINGS_CSV="${LOG_SUBDIR}/e2e_${TABLE_TYPE_LOWER}_v${TARGET_VERSION}_${IS_LOGICAL_TIMESTAMP_ENABLED}_step_timings.csv"
+LOG_FILE="${LOG_SUBDIR}/e2e_${TABLE_TYPE_LOWER}_v${TARGET_VERSION}_${IS_LOGICAL_TIMESTAMP_ENABLED}_${DATA_SHAPE_TAG}.log"
+STEP_TIMINGS_CSV="${LOG_SUBDIR}/e2e_${TABLE_TYPE_LOWER}_v${TARGET_VERSION}_${IS_LOGICAL_TIMESTAMP_ENABLED}_${DATA_SHAPE_TAG}_step_timings.csv"
 
 # Create log file and write all output to it (and console) via helper
 : > "$LOG_FILE"
@@ -212,6 +215,9 @@ log_info "  Phases              : baseline (5 ingest + read x${READ_PERF_ITERATI
 log_info "  COW                 : full-table read after all ingests (${READ_PERF_ITERATIONS} iteration(s) per step)"
 log_info "  MOR                 : read before compaction, then compaction, then post-compaction read (${READ_PERF_ITERATIONS} iter each read step)"
 log_info "  Read iterations     : ${READ_PERF_ITERATIONS} (READ_PERFORMANCE_ITERATIONS in common.properties; E2E runs one benchmark suite call per iteration)"
+log_info "  Data shape tag      : ${DATA_SHAPE_TAG} (NUM_OF_COLUMNS_NUM_OF_PARTITIONS_NUM_OF_RECORDS_PER_PARTITION)"
+log_info "  DATA_PATH / SOURCE  : ${DATA_PATH} / ${SOURCE_DATA}"
+log_info "  Reports / state     : ${REPORTS_SHAPE_ROOT} / ${E2E_STATE_DIR}"
 log_equal
 
 get_step_status() {
@@ -252,8 +258,8 @@ upload_benchmark_csv_to_s3() {
   local f
   for f in "${REPORTS_READ_DIR}"/hudi_benchmark_results*.csv; do
     if [[ -f "$f" ]]; then
-      echo "Uploading $(basename "$f") to S3: ${BASE_PATH}/reports/read/$(basename "$f")"
-      aws s3 cp "$f" "${BASE_PATH}/reports/read/$(basename "$f")" --only-show-errors 2>&1 | tee -a "$LOG_FILE" || true
+      echo "Uploading $(basename "$f") to S3: ${BASE_PATH}/reports/${DATA_SHAPE_TAG}/read/$(basename "$f")"
+      aws s3 cp "$f" "${BASE_PATH}/reports/${DATA_SHAPE_TAG}/read/$(basename "$f")" --only-show-errors 2>&1 | tee -a "$LOG_FILE" || true
     fi
   done
 }
@@ -265,8 +271,8 @@ upload_write_perf_csv_to_s3() {
   local f
   for f in "${REPORTS_WRITE_DIR}"/hudi_write_performance*.csv; do
     if [[ -f "$f" ]]; then
-      echo "Uploading write performance $(basename "$f") to S3: ${BASE_PATH}/reports/write/$(basename "$f")"
-      aws s3 cp "$f" "${BASE_PATH}/reports/write/$(basename "$f")" --only-show-errors 2>&1 | tee -a "$LOG_FILE" || true
+      echo "Uploading write performance $(basename "$f") to S3: ${BASE_PATH}/reports/${DATA_SHAPE_TAG}/write/$(basename "$f")"
+      aws s3 cp "$f" "${BASE_PATH}/reports/${DATA_SHAPE_TAG}/write/$(basename "$f")" --only-show-errors 2>&1 | tee -a "$LOG_FILE" || true
     fi
   done
 }
@@ -276,10 +282,10 @@ upload_comparison_csv_to_s3() {
     return 0
   fi
   local f
-  for f in "${REPORTS_DIR}"/e2e_baseline_vs_experiment*.csv; do
+  for f in "${REPORTS_SHAPE_ROOT}"/e2e_baseline_vs_experiment*.csv; do
     if [[ -f "$f" ]]; then
-      echo "Uploading comparison $(basename "$f") to S3: ${BASE_PATH}/reports/$(basename "$f")"
-      aws s3 cp "$f" "${BASE_PATH}/reports/$(basename "$f")" --only-show-errors 2>&1 | tee -a "$LOG_FILE" || true
+      echo "Uploading comparison $(basename "$f") to S3: ${BASE_PATH}/reports/${DATA_SHAPE_TAG}/$(basename "$f")"
+      aws s3 cp "$f" "${BASE_PATH}/reports/${DATA_SHAPE_TAG}/$(basename "$f")" --only-show-errors 2>&1 | tee -a "$LOG_FILE" || true
     fi
   done
 }
@@ -291,12 +297,12 @@ upload_e2e_log_to_s3() {
   if [[ ! -f "${LOG_FILE:-}" ]]; then
     return 0
   fi
-  local s3_log_file="${S3_LOGS_DIR}/${LOG_RUN_ID}/$(basename "$LOG_FILE")"
+  local s3_log_file="${S3_LOGS_DIR}/${LOG_RUN_ID}/${DATA_SHAPE_TAG}/$(basename "$LOG_FILE")"
   echo "Uploading log to S3: $s3_log_file"
   aws s3 cp "$LOG_FILE" "$s3_log_file" --only-show-errors 2>&1 | tee -a "$LOG_FILE" || true
 
   if [[ -f "${STEP_TIMINGS_CSV:-}" ]]; then
-    local s3_timings="${S3_LOGS_DIR}/${LOG_RUN_ID}/$(basename "$STEP_TIMINGS_CSV")"
+    local s3_timings="${S3_LOGS_DIR}/${LOG_RUN_ID}/${DATA_SHAPE_TAG}/$(basename "$STEP_TIMINGS_CSV")"
     echo "Uploading step timings to S3: $s3_timings"
     aws s3 cp "$STEP_TIMINGS_CSV" "$s3_timings" --only-show-errors 2>&1 | tee -a "$LOG_FILE" || true
   fi
@@ -334,7 +340,7 @@ _e2e_exit_finalize() {
   fi
   if [[ "${IS_LOCAL_RUN:-false}" == "true" ]]; then
     log_info "IS_LOCAL_RUN=true: skipping benchmark/write/comparison CSV and log uploads to S3 (local log: $LOG_FILE)"
-    echo "IS_LOCAL_RUN=true: E2E state and reports kept locally under ${SCRIPT_DIR}/.e2e_state/ and ${REPORTS_DIR}/"
+    echo "IS_LOCAL_RUN=true: E2E state and reports kept locally under ${SCRIPT_DIR}/.e2e_state/${DATA_SHAPE_TAG}/ and ${REPORTS_SHAPE_ROOT}/"
     return 0
   fi
 
@@ -342,7 +348,7 @@ _e2e_exit_finalize() {
   upload_write_perf_csv_to_s3
   upload_comparison_csv_to_s3
   upload_e2e_log_to_s3
-  echo "E2E state synced to S3 per phase after each step (baseline + experiment state files under ${BASE_PATH}/e2e_state/)"
+  echo "E2E state synced to S3 per phase after each step (under ${BASE_PATH}/e2e_state/${DATA_SHAPE_TAG}/)"
 }
 
 run_step() {
@@ -397,7 +403,7 @@ run_e2e_phase() {
   local phase_upper
   phase_upper=$(echo "$phase" | tr '[:lower:]' '[:upper:]')
   E2E_STATE_FILE="${E2E_STATE_DIR}/state_${phase}_${TABLE_TYPE_LOWER}_${IS_LOGICAL_TIMESTAMP_ENABLED}_v${TARGET_VERSION}.txt"
-  S3_STATE_FILE="${BASE_PATH}/e2e_state/state_${phase}_${TABLE_TYPE_LOWER}_${IS_LOGICAL_TIMESTAMP_ENABLED}_v${TARGET_VERSION}.txt"
+  S3_STATE_FILE="${BASE_PATH}/e2e_state/${DATA_SHAPE_TAG}/state_${phase}_${TABLE_TYPE_LOWER}_${IS_LOGICAL_TIMESTAMP_ENABLED}_v${TARGET_VERSION}.txt"
   BENCHMARK_CSV_PATH="${BENCHMARK_REPORT_STEM}_${phase}.csv"
   WRITE_PERF_CSV="${WRITE_REPORT_STEM}_${phase}.csv"
   export WRITE_PERF_CSV
@@ -587,7 +593,7 @@ if [[ "$DRY_RUN" != true ]]; then
   "${_cmp_args[@]}" 2>&1 | tee -a "$LOG_FILE"
   _cmp_st="${PIPESTATUS[0]}"
   if [[ "$_cmp_st" -ne 0 ]]; then
-    log_echo "⚠ Comparison step failed (exit $_cmp_st); check phase CSVs under ${REPORTS_DIR}"
+    log_echo "⚠ Comparison step failed (exit $_cmp_st); check phase CSVs under ${REPORTS_SHAPE_ROOT}"
   fi
 fi
 
@@ -603,7 +609,7 @@ fi
 echo "Write performance: ${WRITE_REPORT_STEM}_{baseline,experiment}.csv"
 # compare_e2e_phases.py appends _<baseline_hudi>_vs_<experiment_hudi> before .csv
 shopt -s nullglob
-_cmp_prefix="${REPORTS_DIR}/e2e_baseline_vs_experiment_${BENCHMARK_TABLE_SUFFIX}_${IS_LOGICAL_TIMESTAMP_ENABLED}_${BENCHMARK_VERSION_SUFFIX}"
+_cmp_prefix="${REPORTS_SHAPE_ROOT}/e2e_baseline_vs_experiment_${BENCHMARK_TABLE_SUFFIX}_${IS_LOGICAL_TIMESTAMP_ENABLED}_${BENCHMARK_VERSION_SUFFIX}_${DATA_SHAPE_TAG}"
 _cmp_written=("${_cmp_prefix}"*.csv)
 if ((${#_cmp_written[@]})); then
   for _cf in "${_cmp_written[@]}"; do

@@ -20,7 +20,7 @@ Important properties:
 - `SPARK_HOME`, `BASE_PATH`, `S3_JARS_PATH`, `JARS_PATH`, `DATA_PATH`
 - `SCRIPTS_DIR`, `INITIAL_BATCH_SCALA`, `INCREMENTAL_SCRIPT`, `PY_SCRIPT`
 - `SCHEMA_FILE`, `PROPS_FILE`, `SPARK_DEFAULTS_CONF`
-- `NUM_OF_COLUMNS`, `NUM_OF_PARTITIONS`, `NUM_OF_RECORDS_TO_UPDATE`
+- `NUM_OF_COLUMNS`, `NUM_OF_PARTITIONS`, `NUM_OF_RECORDS_PER_PARTITION`, `NUM_OF_RECORDS_TO_UPDATE` — with `load_config.sh`, these define **`DATA_SHAPE_TAG`** (`cols_parts_rpp`) and isolate `DATA_PATH`, reports, logs, and E2E state. Set **`SKIP_DATA_PATH_SHAPE_SUFFIX=1`** only if you manage `DATA_PATH` manually.
 - `SOURCE_DATA`, `BASE_TABLE_NAME`
 
 Table names are derived from `BASE_TABLE_NAME`, table type, and the Hudi version major/minor. For example:
@@ -157,15 +157,16 @@ Options:
 - `--dry-run`: print the plan only
 - `--force`: ignore saved state and rerun all steps
 
-State and artifacts (per phase: `_baseline` / `_experiment` in filenames where noted):
+State and artifacts (per phase: `_baseline` / `_experiment` in filenames where noted). Paths include **`DATA_SHAPE_TAG`** = `NUM_OF_COLUMNS_NUM_OF_PARTITIONS_NUM_OF_RECORDS_PER_PARTITION` (e.g. `500_2000_1`).
 
-- Local state: `.e2e_state/state_{baseline|experiment}_<table>_<IS_LOGICAL_TIMESTAMP_ENABLED>_v<ver>.txt` — **two levels**: (1) `phase_completeness=success` skips the whole phase on rerun unless `--force`; (2) `step…=success|failure` per batch stage (parquet, Hudi, benchmark, and MOR compaction/post-benchmark when applicable).
-- S3 state: `${BASE_PATH}/e2e_state/state_{baseline|experiment}_...`
-- Local log: `logs/<YYYYMMDD>/e2e_<table>_v<ver>_<IS_LOGICAL_TIMESTAMP_ENABLED>.log`
-- Read benchmarks: `reports/read/hudi_benchmark_results_<cow|mor>_<lts>_<versions>_{baseline|experiment}.csv`
-- Write performance: `reports/write/hudi_write_performance_<cow|mor>_<lts>_<versions>_{baseline|experiment}.csv`
-- Comparison: `reports/e2e_baseline_vs_experiment_<cow|mor>_<lts>_<versions>.csv`
-- S3 uploads: `${BASE_PATH}/reports/read/`, `${BASE_PATH}/reports/write/`, comparison CSVs under `${BASE_PATH}/reports/`; logs under `${BASE_PATH}/logs/`
+- Parquet + Hudi tables: `${DATA_PATH}/…` with `DATA_PATH` defaulting to `${BASE_PATH}/data/${DATA_SHAPE_TAG}`; source parquet under `wide_<cols>cols_<parts>parts_<rpp>rpp[_lts]`.
+- Local state: `.e2e_state/<DATA_SHAPE_TAG>/state_{baseline|experiment}_<table>_<IS_LOGICAL_TIMESTAMP_ENABLED>_v<ver>.txt` — **two levels**: (1) `phase_completeness=success` skips the whole phase on rerun unless `--force`; (2) `step…=success|failure` per batch stage (parquet, Hudi, benchmark, and MOR compaction/post-benchmark when applicable).
+- S3 state: `${BASE_PATH}/e2e_state/<DATA_SHAPE_TAG>/state_{baseline|experiment}_...`
+- Local log: `logs/<YYYYMMDD>/<DATA_SHAPE_TAG>/e2e_<table>_v<ver>_<IS_LOGICAL_TIMESTAMP_ENABLED>_<DATA_SHAPE_TAG>.log` (and matching `*_step_timings.csv`).
+- Read benchmarks: `reports/<DATA_SHAPE_TAG>/read/hudi_benchmark_results_<cow|mor>_<lts>_<versions>_<DATA_SHAPE_TAG>_{baseline|experiment}.csv`
+- Write performance: `reports/<DATA_SHAPE_TAG>/write/hudi_write_performance_<cow|mor>_<lts>_<versions>_<DATA_SHAPE_TAG>_{baseline|experiment}.csv`
+- Comparison: `reports/<DATA_SHAPE_TAG>/e2e_baseline_vs_experiment_<cow|mor>_<lts>_<versions>_<DATA_SHAPE_TAG>.csv` (compare script appends `_<baseline>_vs_<experiment>` before `.csv`)
+- S3 uploads: `${BASE_PATH}/reports/<DATA_SHAPE_TAG>/read|write/`, comparison under `${BASE_PATH}/reports/<DATA_SHAPE_TAG>/`; logs under `${BASE_PATH}/logs/<YYYYMMDD>/<DATA_SHAPE_TAG>/`
 
 The E2E script uploads state to S3 after each step **within the current phase**, so reruns can resume baseline or experiment independently.
 

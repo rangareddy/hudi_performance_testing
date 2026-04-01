@@ -245,6 +245,11 @@ def env_int(name: str, default: int) -> int:
         return default
 
 
+def default_initial_batch_size() -> int:
+    """Row count for batch 0: partitions × records/partition (matches scripts/initial_batch.scala)."""
+    return env_int("NUM_OF_PARTITIONS", 2000) * env_int("NUM_OF_RECORDS_PER_PARTITION", 1)
+
+
 def short_table_type(table_type: str) -> str:
     t = (table_type or "").upper()
     if "MERGE" in t:
@@ -858,8 +863,11 @@ def main() -> int:
     p.add_argument(
         "--initial-batch-size",
         type=int,
-        default=env_int("NUM_OF_PARTITIONS", 2000),
-        help="Batch size label for batch_id 0 (write table). Default: env NUM_OF_PARTITIONS or 2000.",
+        default=default_initial_batch_size(),
+        help=(
+            "Batch size label for batch_id 0 (write table). "
+            "Default: NUM_OF_PARTITIONS × NUM_OF_RECORDS_PER_PARTITION from env (initial load size)."
+        ),
     )
     p.add_argument(
         "--incremental-batch-size",
