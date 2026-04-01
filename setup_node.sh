@@ -14,8 +14,8 @@ export SKIP_SPARK_HOME_CHECK=1
 source "${SCRIPT_DIR}/scripts/load_config.sh"
 export SPARK_MAJOR_VERSION=$(echo "${SPARK_VERSION}" | cut -d '.' -f 1,2)
 export HADOOP_MAJOR_VERSION=$(echo "${HADOOP_VERSION}" | cut -d '.' -f 1)
-export MVN_URL=https://repo1.maven.org/maven2/
-export MVN_APACHE_URL=$MVN_URL/org/apache/
+export MVN_URL=https://repo1.maven.org/maven2
+export MVN_APACHE_URL=$MVN_URL/org/apache
 
 log_equal
 log_info "Hudi performance testing node setup"
