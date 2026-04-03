@@ -121,20 +121,22 @@ def run_incremental_batch(spark: SparkSession, batch_id: int):
 
     print(f"📍 Writing to: {target_data_path}")
     final_bench_df.repartition(1).write.mode("append").parquet(target_data_path)
+    print(f"📍 Data written to: {target_data_path} for batch {batch_id}")
     final_bench_df.unpersist()
-    print("✅ Incremental batch completed successfully")
-    print(f"📍 Data written to: {target_data_path}")
+    print(f"✅ Incremental batch {batch_id} completed successfully")
 
 
 def main():
     batch_id = get_env_int("BATCH_ID", 1)
-
-    spark = create_spark(f"IncrementalBatch_{batch_id}")
-
+    REQUESTED_BATCH_ID = get_env_int("REQUESTED_BATCH_ID", batch_id)   
+    print(f"🚀 Starting incremental batch {REQUESTED_BATCH_ID}")
+    spark = None
     try:
+        spark = create_spark(f"IncrementalBatch_{REQUESTED_BATCH_ID}")
         run_incremental_batch(spark, batch_id)
     finally:
-        spark.stop()
+        if spark:
+            spark.stop()
 
 
 if __name__ == "__main__":

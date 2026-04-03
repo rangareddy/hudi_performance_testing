@@ -195,6 +195,17 @@ load_config() {
       fi
     fi
   fi
+
+  # E2E / tooling: gate parquet+Hudi+compaction vs read benchmarks (run_e2e_performance_test.sh).
+  case "$(echo "${ENABLE_WRITE_OPERATIONS:-true}" | tr '[:upper:]' '[:lower:]')" in
+    true|yes|1|on) export ENABLE_WRITE_OPERATIONS=true ;;
+    *) export ENABLE_WRITE_OPERATIONS=false ;;
+  esac
+  case "$(echo "${ENABLE_READ_OPERATIONS:-true}" | tr '[:upper:]' '[:lower:]')" in
+    true|yes|1|on) export ENABLE_READ_OPERATIONS=true ;;
+    *) export ENABLE_READ_OPERATIONS=false ;;
+  esac
+
   return 0
 }
 

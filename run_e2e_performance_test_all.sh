@@ -14,6 +14,7 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 START_TS=$(date +%s)
+export FORCE_TO_RUN_SCRIPTS=${FORCE_TO_RUN_SCRIPTS:-false}
 
 _format_elapsed() {
   local d=$1
@@ -38,8 +39,13 @@ trap _print_total_time EXIT
 
 ALL_EXIT=0
 
+FORCE_PARAM=""
+if [ "$FORCE_TO_RUN_SCRIPTS" == "true" ]; then
+  FORCE_PARAM="--force"
+fi 
+
 echo "Running end to end performance test for COPY_ON_WRITE table type"
-if bash "$SCRIPT_DIR/run_e2e_performance_test.sh" --table-type COPY_ON_WRITE; then
+if bash "$SCRIPT_DIR/run_e2e_performance_test.sh" --table-type COPY_ON_WRITE $FORCE_PARAM; then
   echo "Success: run_e2e_performance_test.sh --table-type COPY_ON_WRITE succeeded"
 else
   echo "Error: run_e2e_performance_test.sh --table-type COPY_ON_WRITE failed" >&2
@@ -47,7 +53,7 @@ else
 fi
 
 echo "Running end to end performance test for MERGE_ON_READ table type"
-if bash "$SCRIPT_DIR/run_e2e_performance_test.sh" --table-type MERGE_ON_READ; then
+if bash "$SCRIPT_DIR/run_e2e_performance_test.sh" --table-type MERGE_ON_READ $FORCE_PARAM; then
   echo "Success: run_e2e_performance_test.sh --table-type MERGE_ON_READ succeeded"
 else
   echo "Error: run_e2e_performance_test.sh --table-type MERGE_ON_READ failed" >&2

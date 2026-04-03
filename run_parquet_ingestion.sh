@@ -66,8 +66,7 @@ if [[ ! "$BATCH_ID" =~ ^[0-9]+$ ]]; then
   exit 1
 fi
 
-# E2E batch id for reporting (incremental job may export BATCH_ID=0 for IS_REPEAT_SAME_BATCH)
-REQUESTED_BATCH_ID="$BATCH_ID"
+export REQUESTED_BATCH_ID="$BATCH_ID"
 
 if [[ "$INGESTION_TYPE" != "initial" ]] && [[ "$INGESTION_TYPE" != "incremental" ]]; then
   log_error "❌ Invalid Ingestion Type: $INGESTION_TYPE"
@@ -215,6 +214,7 @@ else
   if [[ -n "${AWS_S3_JARS:-}" ]]; then
     _parquet_submit_status=0
     "${SPARK_HOME}/bin/spark-submit" \
+      --name "parquet_incremental_batch_${REQUESTED_BATCH_ID}" \
       --master "${SPARK_MASTER}" \
       --deploy-mode client \
       --jars "$AWS_S3_JARS" \
@@ -223,6 +223,7 @@ else
   else
     _parquet_submit_status=0
     "${SPARK_HOME}/bin/spark-submit" \
+      --name "parquet_incremental_batch_${REQUESTED_BATCH_ID}" \
       --master "${SPARK_MASTER}" \
       --deploy-mode client \
       --properties-file "${SPARK_DEFAULTS_CONF}" \
