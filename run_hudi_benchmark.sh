@@ -17,6 +17,7 @@ usage() {
   echo "  bash $SCRIPT_NAME --table-type <COPY_ON_WRITE|MERGE_ON_READ> --target-hudi-version <SOURCE_HUDI_VERSION|TARGET_HUDI_VERSION> [--batch-id <id> --help]"
   echo ""
   echo "  --batch-id is optional (used by run_benchmark_suite.py for CSV labeling)."
+  echo "  --table-name-suffix optional (e.g. baseline / experiment for E2E)."
   echo ""
   echo "Examples:"
   echo "  bash $SCRIPT_NAME --table-type COPY_ON_WRITE --target-hudi-version SOURCE_HUDI_VERSION"
@@ -24,6 +25,8 @@ usage() {
   echo ""
   exit 1
 }
+
+TABLE_NAME_SUFFIX_ARG=""
 
 while [[ $# -gt 0 ]]; do
   case $1 in
@@ -51,6 +54,14 @@ while [[ $# -gt 0 ]]; do
       BATCH_ID_ARG="$2"
       shift 2
       ;;
+    --table-name-suffix)
+      if [[ -z "${2:-}" ]]; then
+        log_error "❌ Error: --table-name-suffix requires a value"
+        usage
+      fi
+      TABLE_NAME_SUFFIX_ARG="$2"
+      shift 2
+      ;;
     -h|--help)
       usage
       ;;
@@ -69,6 +80,7 @@ fi
 TABLE_TYPE_UPPER=$(echo "$TABLE_TYPE_ARG" | tr '[:lower:]' '[:upper:]')
 HUDI_VERSION_SUFFIX=$(echo "$TARGET_HUDI_VERSION" | sed 's/-.*//' | cut -d. -f1,2 | tr '.' '_')
 IS_LOGICAL_TIMESTAMP_ENABLED=${IS_LOGICAL_TIMESTAMP_ENABLED:-true}
+BASE_TABLE_NAME=${BASE_TABLE_NAME:-hudi_regular}
 
 case "$TABLE_TYPE_UPPER" in
   COPY_ON_WRITE|COW)
@@ -90,6 +102,14 @@ if [[ "$IS_LOGICAL_TIMESTAMP_ENABLED" == true ]]; then
   TABLE_NAME="${TABLE_NAME}_lts"
 fi
 
+if [[ -n "$TABLE_NAME_SUFFIX_ARG" ]]; then
+  if [[ ! "$TABLE_NAME_SUFFIX_ARG" =~ ^[a-zA-Z0-9_]+$ ]]; then
+    log_error "❌ Error: --table-name-suffix must be alphanumeric or underscore only"
+    exit 1
+  fi
+  TABLE_NAME="${TABLE_NAME}_${TABLE_NAME_SUFFIX_ARG}"
+fi
+
 BENCH_DATA_PATH="${DATA_PATH}/$TABLE_NAME"
 
 export HUDI_SPARK_BUNDLE_JAR="${JARS_PATH}/hudi-spark${SPARK_MAJOR_VERSION}-bundle_${SCALA_VERSION}-${TARGET_HUDI_VERSION}.jar"
@@ -106,6 +126,9 @@ if [ ! -f "$HUDI_SPARK_BUNDLE_JAR" ]; then
   exit 1
 fi
 
+SPARK_SUBMIT_JARS="$HUDI_SPARK_BUNDLE_JAR"
+[[ -n "${AWS_S3_JARS:-}" ]] && SPARK_SUBMIT_JARS="${SPARK_SUBMIT_JARS},${AWS_S3_JARS}"
+
 log_equal
 log_info "🚀 Starting Hudi Benchmark"
 log_hyphen
@@ -114,33 +137,30 @@ log_info "Table Type        : $TABLE_TYPE"
 log_info "Data Path         : $BENCH_DATA_PATH"
 log_info "Spark Home        : $SPARK_HOME"
 log_info "Script Path       : $PY_SCRIPT"
-log_info "Hudi Spark Jar    : $HUDI_SPARK_BUNDLE_JAR"
 log_equal
 
 log_info "Executing spark-submit command: "
 log_hyphen
 log_info "${SPARK_HOME}"/bin/spark-submit \
-  --master yarn \
+  --master "${SPARK_MASTER}" \
   --deploy-mode client \
   --properties-file "${SPARK_DEFAULTS_CONF}" \
-  --jars "$HUDI_SPARK_BUNDLE_JAR,$AWS_S3_JARS" \
+  --jars "$SPARK_SUBMIT_JARS" \
   --conf "spark.serializer=org.apache.spark.serializer.KryoSerializer" \
   --conf "spark.sql.catalog.spark_catalog=org.apache.spark.sql.hudi.catalog.HoodieCatalog" \
   --conf "spark.sql.extensions=org.apache.spark.sql.hudi.HoodieSparkSessionExtension" \
-  --conf "spark.sql.adaptive.enabled=true" \
   "$PY_SCRIPT" \
   "$BENCH_DATA_PATH"
 log_hyphen
 
 if "${SPARK_HOME}"/bin/spark-submit \
-  --master yarn \
+  --master "${SPARK_MASTER}" \
   --deploy-mode client \
   --properties-file "${SPARK_DEFAULTS_CONF}" \
-  --jars "$HUDI_SPARK_BUNDLE_JAR,$AWS_S3_JARS" \
+  --jars "$SPARK_SUBMIT_JARS" \
   --conf "spark.serializer=org.apache.spark.serializer.KryoSerializer" \
   --conf "spark.sql.catalog.spark_catalog=org.apache.spark.sql.hudi.catalog.HoodieCatalog" \
   --conf "spark.sql.extensions=org.apache.spark.sql.hudi.HoodieSparkSessionExtension" \
-  --conf "spark.sql.adaptive.enabled=true" \
   "$PY_SCRIPT" \
   "$BENCH_DATA_PATH"
 then
