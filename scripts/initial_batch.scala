@@ -15,6 +15,8 @@ import spark.implicits._
 val batchId: Int = sys.env.get("BATCH_ID").map(_.toInt).getOrElse(0)
 val numCols = sys.env.get("NUM_OF_COLUMNS").map(_.toInt).getOrElse(500)
 val numPartitions = sys.env.get("NUM_OF_PARTITIONS").map(_.toInt).getOrElse(10000)
+val numRecordsPerPartition = sys.env.get("NUM_OF_RECORDS_PER_PARTITION").map(_.toInt).getOrElse(1000)
+
 val DEFAULT_TARGET="s3://performance-benchmark-datasets-us-west-2/hudi-bench/performance/logical_ts_perf/data/wide_500cols_10000parts"
 val outputPath = sys.env.getOrElse("TARGET_DATA", DEFAULT_TARGET)
 val enableLogicalTs: Boolean = sys.env.get("IS_LOGICAL_TIMESTAMP_ENABLED").map(_.toBoolean).getOrElse(true)
@@ -37,7 +39,7 @@ val firstTenTypes = Seq(
   DoubleType,
   DecimalType(18,2),
   DateType,
-  TimestampType,
+  StringType,
   StringType
 )
 
@@ -67,11 +69,15 @@ val schema = StructType(fields)
 // ----------------------------------------------------------------------
 println(s"🚀 Starting data generation")
 println(s"Batch ID: $batchId")
-println(s"Columns: $numCols  Partitions: $numPartitions")
+println(s"Columns: $numCols  Partitions: $numPartitions  Records: $numRecordsPerPartition")
 println(s"Logical Timestamp Enabled: $enableLogicalTs")
 
-val data = spark.sparkContext.parallelize(1 to numPartitions, numPartitions).map { i =>
+// Configuration for 2,000 partitions with 100 records each
+val totalRecords = numPartitions * numRecordsPerPartition
+
+val data = spark.sparkContext.parallelize(1 to totalRecords, numPartitions).map { i =>
   val localTs = baseTime.plusSeconds(i)
+  // 1. Generate the values for the columns
   val values = (1 to numCols).map { colIdx =>
     if (colIdx <= 10) {
       firstTenTypes(colIdx - 1) match {
@@ -91,10 +97,9 @@ val data = spark.sparkContext.parallelize(1 to numPartitions, numPartitions).map
           new BigDecimal(i * colIdx * 0.1)
         case DateType =>
           Date.valueOf(baseTime.toLocalDate.plusDays(i))
-        case TimestampType =>
-          toTimestamp(localTs)
       }
     } else if (enableLogicalTs && colIdx % 50 == 0) {
+      // Logical Timestamp Logic
       if ((colIdx / 50) % 2 == 0)
         toMillis(localTs.plusNanos(colIdx * 1000))
       else
@@ -103,25 +108,42 @@ val data = spark.sparkContext.parallelize(1 to numPartitions, numPartitions).map
       s"value_${i}_${colIdx}"
     }
   }
+  // 2. Add the partition column (col_1)
+  val partitionId = (i % numPartitions)
+  val partitionValue = f"partition_$partitionId%05d"
 
-  Row.fromSeq(values :+ f"partition_${i}%05d")
+  // 3. Construct the Row
+  Row.fromSeq(values :+ partitionValue)
 }
 
 // ----------------------------------------------------------------------
 // Create DataFrame
 // ----------------------------------------------------------------------
 val df = spark.createDataFrame(data, schema)
-println(s"✅ Successfully generated DataFrame with ${numCols} columns and ${numPartitions} partitions.")
+println(s"✅ Successfully generated DataFrame with ${numCols} columns, ${totalRecords} total records (${numRecordsPerPartition} per partition key, ${numPartitions} keys).")
 
 println(s"📝 Writing data to $outputPath")
-df.repartition($"partition_col")
+val safeRowsPerTask = 50000
+val dynamicRepartition = math.max(1, (totalRecords / safeRowsPerTask).toInt)
+
+df.repartition(dynamicRepartition, $"partition_col")
   .write
   .mode("overwrite")
   .parquet(outputPath)
 
 println(s"📍 Data written to: ${outputPath}")
 df.printSchema()
-df.show(5, false)
+df.show(1, false)
+
+val output_count = spark.read.parquet(outputPath).count()
+
+if (output_count != totalRecords) {
+    // Added 's' for interpolation and switched to println for a new line
+    println(s"Count mismatch for initial data generation. Expected Count: $totalRecords and Actual Count: $output_count")
+    System.exit(1)
+} else {
+    println(s"Validation successful: $output_count records verified.")
+}
 
 // Stop the spark session
 spark.stop()

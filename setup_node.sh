@@ -14,6 +14,8 @@ export SKIP_SPARK_HOME_CHECK=1
 source "${SCRIPT_DIR}/scripts/load_config.sh"
 export SPARK_MAJOR_VERSION=$(echo "${SPARK_VERSION}" | cut -d '.' -f 1,2)
 export HADOOP_MAJOR_VERSION=$(echo "${HADOOP_VERSION}" | cut -d '.' -f 1)
+export MVN_URL=https://repo1.maven.org/maven2
+export MVN_APACHE_URL=$MVN_URL/org/apache
 
 log_equal
 log_info "Hudi performance testing node setup"
@@ -32,8 +34,10 @@ download_hudi_jars() {
   hudi_version_suffix=$(echo "$hudi_version" | cut -d '.' -f 1,2)
   hudi_spark_bundle_jar="hudi-spark${SPARK_MAJOR_VERSION}-bundle_${SCALA_VERSION}-${hudi_version}.jar"
   hudi_utilities_slim_bundle_jar="hudi-utilities-slim-bundle_${SCALA_VERSION}-${hudi_version}.jar"
+  # Check and download hudi spark bundle
   if [[ ! -f "$JARS_PATH/$hudi_spark_bundle_jar" ]]; then
-    aws s3 cp $S3_JARS_PATH/${hudi_version_suffix}/$hudi_spark_bundle_jar $JARS_PATH/$hudi_spark_bundle_jar
+    aws s3 cp $S3_JARS_PATH/${hudi_version_suffix}/${SPARK_MAJOR_VERSION}/${hudi_spark_bundle_jar} \
+      $JARS_PATH/${hudi_spark_bundle_jar}
     if [ $? -eq 0 ]; then
       log_success "Hudi Spark Bundle $hudi_spark_bundle_jar downloaded successfully"
     else
@@ -41,8 +45,11 @@ download_hudi_jars() {
       exit 1
     fi
   fi
+  
+  # Check and download hudi utilities slim bundle
   if [[ ! -f "$JARS_PATH/$hudi_utilities_slim_bundle_jar" ]]; then
-    aws s3 cp $S3_JARS_PATH/${hudi_version_suffix}/$hudi_utilities_slim_bundle_jar $JARS_PATH/$hudi_utilities_slim_bundle_jar
+    aws s3 cp $S3_JARS_PATH/${hudi_version_suffix}/${SPARK_MAJOR_VERSION}/$hudi_utilities_slim_bundle_jar \
+      $JARS_PATH/$hudi_utilities_slim_bundle_jar
     if [ $? -eq 0 ]; then
       log_success "Hudi Utilities Slim Bundle $hudi_utilities_slim_bundle_jar downloaded successfully"
     else
@@ -54,6 +61,9 @@ download_hudi_jars() {
 
 # Returns installed Spark x.y.z from SPARK_HOME, or empty if unknown
 get_installed_spark_version() {
+  if [ -d $TEMP_SPARK_HOME ]; then
+    export SPARK_HOME=$TEMP_SPARK_HOME
+  fi 
   if [[ -z "${SPARK_HOME:-}" || ! -d "$SPARK_HOME" || ! -x "${SPARK_HOME}/bin/spark-submit" ]]; then
     echo ""
     return 0
@@ -76,19 +86,23 @@ setup_spark() {
     SPARK_HOME="$HOME/spark-${SPARK_VERSION}-bin-hadoop${HADOOP_MAJOR_VERSION}"
     log_info "Spark $SPARK_VERSION successfully installed in $SPARK_HOME"
 
-    hadoop_aws_jar="hadoop-aws-$HADOOP_VERSION.jar"
-    if [[ ! -f "$SPARK_HOME/jars/$hadoop_aws_jar" ]]; then 
-      log_info "Installing Hadoop AWS $HADOOP_VERSION for Spark $SPARK_VERSION"
-      wget -q https://repo1.maven.org/maven2/org/apache/hadoop/hadoop-aws/$HADOOP_VERSION/$hadoop_aws_jar \
-        -O "$SPARK_HOME/jars/$hadoop_aws_jar"
-      log_info "Hadoop AWS $HADOOP_VERSION for Spark $SPARK_VERSION installed successfully"
-    fi
-    aws_java_sdk_bundle_jar="aws-java-sdk-bundle-$AWS_JAVA_SDK_BUNDLE_VERSION.jar"  
-    if [[ ! -f "$SPARK_HOME/jars/$aws_java_sdk_bundle_jar" ]]; then
-      log_info "Installing AWS Java SDK Bundle $AWS_JAVA_SDK_BUNDLE_VERSION for Spark $SPARK_VERSION"
-      wget -q https://repo1.maven.org/maven2/com/amazonaws/aws-java-sdk-bundle/$AWS_JAVA_SDK_BUNDLE_VERSION/$aws_java_sdk_bundle_jar \
-        -O "$SPARK_HOME/jars/$aws_java_sdk_bundle_jar"
-      log_info "AWS Java SDK Bundle $AWS_JAVA_SDK_BUNDLE_VERSION for Spark $SPARK_VERSION installed successfully"
+    if [[ "${IS_LOCAL_RUN:-false}" != "true" ]]; then
+      hadoop_aws_jar="hadoop-aws-$HADOOP_VERSION.jar"
+      if [[ ! -f "$SPARK_HOME/jars/$hadoop_aws_jar" ]]; then
+        log_info "Installing Hadoop AWS $HADOOP_VERSION for Spark $SPARK_VERSION"
+        wget -q ${MVN_APACHE_URL}/hadoop/hadoop-aws/$HADOOP_VERSION/$hadoop_aws_jar \
+          -O "$SPARK_HOME/jars/$hadoop_aws_jar"
+        log_info "Hadoop AWS $HADOOP_VERSION for Spark $SPARK_VERSION installed successfully"
+      fi
+      aws_java_sdk_bundle_jar="aws-java-sdk-bundle-$AWS_JAVA_SDK_BUNDLE_VERSION.jar"
+      if [[ ! -f "$SPARK_HOME/jars/$aws_java_sdk_bundle_jar" ]]; then
+        log_info "Installing AWS Java SDK Bundle $AWS_JAVA_SDK_BUNDLE_VERSION for Spark $SPARK_VERSION"
+        wget -q ${MVN_URL}/com/amazonaws/aws-java-sdk-bundle/$AWS_JAVA_SDK_BUNDLE_VERSION/$aws_java_sdk_bundle_jar \
+          -O "$SPARK_HOME/jars/$aws_java_sdk_bundle_jar"
+        log_info "AWS Java SDK Bundle $AWS_JAVA_SDK_BUNDLE_VERSION for Spark $SPARK_VERSION installed successfully"
+      fi
+    else
+      log_info "IS_LOCAL_RUN=true: skipping hadoop-aws and aws-java-sdk-bundle downloads into Spark jars."
     fi
   fi
 }
@@ -103,7 +117,11 @@ else
   setup_spark
 fi
 
-download_hudi_jars "$SOURCE_HUDI_VERSION"
-download_hudi_jars "$TARGET_HUDI_VERSION"
+if [[ "${IS_LOCAL_RUN:-false}" == "true" ]]; then
+  log_info "IS_LOCAL_RUN=true: skipping aws s3 cp Hudi jar downloads (use jars already under JARS_PATH)."
+else
+  download_hudi_jars "$SOURCE_HUDI_VERSION"
+  download_hudi_jars "$TARGET_HUDI_VERSION"
+fi
 
 log_success "Node setup completed successfully."
