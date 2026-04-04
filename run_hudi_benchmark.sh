@@ -167,7 +167,7 @@ then
   log_success "✅ Benchmark job completed successfully"
 else
   log_error "❌ Benchmark job failed"
-  log_hyphen
+  log_hyphen "------------------------------------------------------------------------------"
   exit 1
 fi
-log_hyphen
+log_hyphen "------------------------------------------------------------------------------"
