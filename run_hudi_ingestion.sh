@@ -130,7 +130,7 @@ HUDI_JARS="${HUDI_SPARK_JAR},${HUDI_UTILITIES_JAR}"
 
 log_equal
 log_info "Running Delta Streamer"
-log_hipen
+log_hyphen
 log_info "HUDI_VERSION    : $TARGET_HUDI_VERSION"
 log_info "TABLE_TYPE      : $TABLE_TYPE"
 log_info "TABLE_NAME      : $TABLE_NAME"
@@ -141,7 +141,7 @@ log_info "HUDI_JARS       : $HUDI_JARS"
 log_equal
 
 log_info "Executing spark-submit command: "
-log_hipen
+log_hyphen
 
 log_info "spark-submit command: $SPARK_HOME/bin/spark-submit \
   --master yarn \
@@ -172,7 +172,7 @@ log_info "spark-submit command: $SPARK_HOME/bin/spark-submit \
   --hoodie-conf hoodie.datasource.write.recordkey.field=col_1 \
   --hoodie-conf hoodie.datasource.write.precombine.field=col_1 \
   --hoodie-conf hoodie.datasource.write.partitionpath.field=partition_col"  
-log_hipen
+log_hyphen
 
 append_hudi_write_perf() {
   local duration_sec="$1"
@@ -228,7 +228,7 @@ else
   _wp_dur=$((_wp_end - _wp_start))
   append_hudi_write_perf "$_wp_dur" "failure"
   log_error "❌ Hudi Ingestion job failed in ${_wp_dur} seconds"
-  log_hipen
+  log_hyphen
   exit 1
 fi
-log_hipen
+log_hyphen

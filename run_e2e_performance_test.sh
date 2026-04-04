@@ -200,15 +200,15 @@ run_step() {
   local status
   status=$(get_step_status "$step_id")
   if [[ "$FORCE" != true ]] && [[ "$status" == "success" ]]; then
-    log_hipen
+    log_hyphen
     log_echo ">>> $step_name [SKIPPED - already succeeded]"
-    log_hipen
+    log_hyphen
     return 0
   fi
 
   if [[ "$status" == "failure" ]]; then
     log_echo ">>> $step_name [RETRY - previous run failed]"
-    log_hipen
+    log_hyphen
   elif [[ "$FORCE" == true ]]; then
     log_echo ""
     log_echo ">>> $step_name [FORCE - running regardless of state]"
@@ -241,7 +241,7 @@ TOTAL_STEPS=$((TOTAL_BATCHES * 3))
 
 for ((BATCH_ID=0; BATCH_ID<TOTAL_BATCHES; BATCH_ID++)); do
     start_time=$(date +%s)
-    log_info "$(log_hipen)"
+    log_info "$(log_hyphen)"
     log_echo "Processing batch $BATCH_ID..."
 
     job_type="incremental"
@@ -287,7 +287,7 @@ for ((BATCH_ID=0; BATCH_ID<TOTAL_BATCHES; BATCH_ID++)); do
     fi
     
     log_info "Batch $BATCH_ID processing completed in $duration_formatted ..."
-    log_info "$(log_hipen)"
+    log_info "$(log_hyphen)"
 done
 
 # Upload results and log to S3 (state and CSV already uploaded after each step / each benchmark)

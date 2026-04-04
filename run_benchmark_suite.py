@@ -170,6 +170,7 @@ def main() -> int:
             "batch_id": batch_id,
             "execution_time_seconds": exec_time if exec_time is not None else "",
             "count": count if count is not None else "",
+            "run_timestamp_utc": datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S"),
             "start_time": start_time,
             "end_time": end_time,
             "status": status,
