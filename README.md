@@ -110,21 +110,33 @@ Table names are derived automatically, e.g.:
 ## Quick Start
 
 ```sh
-# 1. Install tmux and start a session (survives disconnects)
-sudo yum install tmux -y && tmux
+sudo yum install tmux git -y
+tmux
+# tmux attach (reconnect)
+```
 
-# 2. Download and extract the project
+To begin your performance testing, you can obtain the source code either via GitHub or directly from the S3 benchmark bucket.
+
+**Option 1: Using Git (Recommended)**
+
+Clone the repository directly from GitHub to ensure you have the latest version:
+
+```sh
+git clone https://github.com/rangareddy/hudi_performance_testing.git
+cd hudi_performance_testing
+```
+
+**Option 2: Using AWS CLI**
+
+If you are working directly on an EMR cluster or an EC2 instance, you can pull the source code from S3:
+
+```sh
+# Copy the source code to your local directory
 aws s3 cp s3://performance-benchmark-datasets-us-west-2/hudi-bench/performance/logical_ts_perf/source_code/ . --recursive
-unzip hudi_performance_testing.zip && cd hudi_performance_testing
 
-# 3. Edit versions and S3 path
-vi scripts/common.properties
-
-# 4. Install Spark and download Hudi jars
-bash setup_node.sh
-
-# 5. Run the full E2E test for both table types
-bash run_e2e_performance_test_all.sh
+# Extract and enter the project directory
+unzip hudi_performance_testing.zip
+cd hudi_performance_testing
 ```
 
 ---

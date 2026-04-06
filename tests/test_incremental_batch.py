@@ -16,45 +16,50 @@ import incremental_batch as ib
 
 
 class TestCalculateRange(unittest.TestCase):
+    def test_batch_0_maps_to_first_slice(self):
+        start, end = ib.calculate_range(batch_id=0, num_records=100)
+        self.assertEqual(start, 1)
+        self.assertEqual(end, 100)
+
     def test_batch_1_starts_at_1(self):
         start, end = ib.calculate_range(batch_id=1, num_records=100)
         self.assertEqual(start, 1)
-        self.assertEqual(end, 101)
+        self.assertEqual(end, 100)
 
     def test_batch_2_follows_batch_1(self):
         start, end = ib.calculate_range(batch_id=2, num_records=100)
         self.assertEqual(start, 101)
-        self.assertEqual(end, 201)
+        self.assertEqual(end, 200)
 
     def test_batch_3_follows_batch_2(self):
         start, end = ib.calculate_range(batch_id=3, num_records=100)
         self.assertEqual(start, 201)
-        self.assertEqual(end, 301)
+        self.assertEqual(end, 300)
 
     def test_small_num_records(self):
         start, end = ib.calculate_range(batch_id=1, num_records=10)
         self.assertEqual(start, 1)
-        self.assertEqual(end, 11)
+        self.assertEqual(end, 10)
 
     def test_ranges_do_not_overlap(self):
-        """Adjacent batches must produce non-overlapping ranges."""
+        """Adjacent batches must produce non-overlapping ranges (inclusive end, next starts at end+1)."""
         _, end1 = ib.calculate_range(batch_id=1, num_records=50)
         start2, _ = ib.calculate_range(batch_id=2, num_records=50)
-        self.assertEqual(end1, start2)
+        self.assertEqual(end1 + 1, start2)
 
     def test_range_length_equals_num_records(self):
         for batch_id in range(1, 5):
             start, end = ib.calculate_range(batch_id=batch_id, num_records=100)
-            self.assertEqual(end - start, 100)
+            self.assertEqual(end - start + 1, 100)
 
 
 class TestGenerateValues(unittest.TestCase):
     def test_correct_count(self):
-        values = ib.generate_values(start=1, end=101, batch_id=1)
+        values = ib.generate_values(start=1, end=100, batch_id=1)
         self.assertEqual(len(values), 100)
 
     def test_value_format(self):
-        values = ib.generate_values(start=1, end=4, batch_id=2)
+        values = ib.generate_values(start=1, end=3, batch_id=2)
         self.assertEqual(values, ["value_1_2", "value_2_2", "value_3_2"])
 
     def test_batch_id_embedded_in_values(self):
@@ -68,7 +73,8 @@ class TestGenerateValues(unittest.TestCase):
         self.assertEqual(len(values), len(set(values)))
 
     def test_empty_range(self):
-        values = ib.generate_values(start=5, end=5, batch_id=1)
+        # Inclusive end: start > end yields no indices.
+        values = ib.generate_values(start=5, end=4, batch_id=1)
         self.assertEqual(values, [])
 
     def test_no_overlap_between_batches(self):
@@ -99,6 +105,9 @@ class TestRunIncrementalBatch(unittest.TestCase):
         df = MagicMock()
         filtered_df = MagicMock()
         filtered_df.count.return_value = record_count
+        filtered_df.persist.return_value = filtered_df
+        filtered_df.repartition.return_value = filtered_df
+        df.persist.return_value = df
         df.filter.return_value = filtered_df
         spark.read.parquet.return_value = df
         return spark, filtered_df
@@ -118,11 +127,12 @@ class TestRunIncrementalBatch(unittest.TestCase):
                 ib.run_incremental_batch(spark, batch_id=1)
 
     def test_reads_from_source_and_writes_to_target(self):
-        spark, filtered_df = self._make_spark_mock()
+        spark, filtered_df = self._make_spark_mock(record_count=10)
         env = {
             "SOURCE_DATA": "s3://bucket/source",
             "TARGET_DATA": "s3://bucket/target/batch_1",
-            "NUM_OF_RECORDS_TO_UPDATE": "100",
+            "NUM_OF_RECORDS_TO_UPDATE": "10",
+            "NUM_OF_FILE_GROUPS_TO_TOUCH": "10",
         }
         mock_col = MagicMock()
         with patch.dict("os.environ", env):
@@ -132,12 +142,13 @@ class TestRunIncrementalBatch(unittest.TestCase):
         filtered_df.write.mode.assert_called_once_with("append")
 
     def test_filters_correct_values_for_batch_1(self):
-        spark, filtered_df = self._make_spark_mock()
+        spark, filtered_df = self._make_spark_mock(record_count=5)
         df = spark.read.parquet.return_value
         env = {
             "SOURCE_DATA": "s3://bucket/source",
             "TARGET_DATA": "s3://bucket/target/batch_1",
             "NUM_OF_RECORDS_TO_UPDATE": "5",
+            "NUM_OF_FILE_GROUPS_TO_TOUCH": "5",
         }
         mock_col = MagicMock()
         with patch.dict("os.environ", env):

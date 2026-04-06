@@ -7,7 +7,7 @@ Tests the benchmark entry-point logic without a live Spark cluster.
 import sys
 import unittest
 from pathlib import Path
-from unittest.mock import MagicMock, call, patch
+from unittest.mock import MagicMock, patch
 
 PROJECT_ROOT = Path(__file__).parent.parent
 sys.path.insert(0, str(PROJECT_ROOT / "scripts"))
@@ -18,7 +18,6 @@ class TestHudiBenchmarkMain(unittest.TestCase):
 
     def _run_main(self, argv, mock_spark=None):
         """Import and run main() with patched argv and SparkSession."""
-        import importlib
         import hudi_benchmark
 
         if mock_spark is None:
@@ -30,16 +29,13 @@ class TestHudiBenchmarkMain(unittest.TestCase):
         mock_builder = MagicMock()
         mock_builder.appName.return_value.getOrCreate.return_value = mock_spark
 
+        mock_session_class = MagicMock()
+        mock_session_class.builder = mock_builder
+
         with patch("sys.argv", argv):
-            with patch("pyspark.sql.SparkSession") as mock_session_class:
-                mock_session_class.builder = mock_builder
-                # Patch at the module level
-                with patch.object(
-                    sys.modules.get("pyspark.sql", MagicMock()),
-                    "SparkSession",
-                    mock_session_class,
-                ):
-                    hudi_benchmark.main()
+            # hudi_benchmark imports SparkSession at load time; patch the module binding.
+            with patch.object(hudi_benchmark, "SparkSession", mock_session_class):
+                hudi_benchmark.main()
         return mock_spark
 
     def test_exits_without_path_argument(self):
