@@ -1,18 +1,10 @@
 #!/usr/bin/env bash
 #
-# End-to-end Hudi performance test (two phases, then comparison):
-#   Baseline: 5 batches — Hudi ingestion always uses SOURCE_HUDI_VERSION.
-#   Experiment: 5 batches — batches 0–2 use SOURCE_HUDI_VERSION, batches 3–4 use TARGET_HUDI_VERSION.
-#   Each batch: parquet → Hudi ingestion (all 5 batches complete first) when ENABLE_WRITE_OPERATIONS=true.
-#   COPY_ON_WRITE: read benchmark(s) after ingests when ENABLE_READ_OPERATIONS=true.
-#   MERGE_ON_READ: read before compaction, compaction (if write on), post-compaction read only if write+read on.
-#   Baseline and experiment use separate Hudi table paths (--table-name-suffix baseline|experiment).
-#   Comparison CSV: only when both ENABLE_WRITE_OPERATIONS and ENABLE_READ_OPERATIONS are true (common.properties).
-#
-# State (two levels, one file per phase under .e2e_state/, mirrored to S3):
-#   1) Phase:   phase_completeness=success — entire phase done; skip all its steps unless --force.
-#   2) Batch/stage: step<idx>_<job>_<batchId>_<kind>=success|failure — parquet / hudi / benchmark (and mor_* for MOR).
-#      After ingest: read benchmark step(s) (READ_PERFORMANCE_ITERATIONS); MOR adds compaction + post-compact read step(s).
+# End-to-end Hudi performance test:
+#   1. One initial parquet ingestion
+#   2. Hudi ingestion (initial load)
+#   3. Run benchmark
+#   4. Two incremental cycles: (generate incremental data → Hudi ingestion → benchmark) × 2
 #
 # Usage:
 #   bash run_e2e_performance_test.sh --table-type COPY_ON_WRITE
@@ -363,16 +355,16 @@ run_step() {
   local status
   status=$(get_step_status "$step_id")
   if [[ "$FORCE" != true ]] && [[ "$status" == "success" ]]; then
-    log_hipen
+    log_hyphen
     log_echo ">>> $step_name [SKIPPED - already succeeded]"
-    log_hipen
+    log_hyphen
     _log_step_timing "${phase:-}" "$step_id" "$step_name" "skipped" "$(date -u +%s)" "$(date -u +%s)" "0" "$@"
     return 0
   fi
 
   if [[ "$status" == "failure" ]]; then
     log_echo ">>> $step_name [RETRY - previous run failed]"
-    log_hipen
+    log_hyphen
   elif [[ "$FORCE" == true ]]; then
     log_echo ""
     log_echo ">>> $step_name [FORCE - running regardless of state]"
@@ -517,7 +509,7 @@ run_e2e_phase() {
   if [[ "$ENABLE_WRITE_OPERATIONS" == true ]]; then
     for ((BATCH_ID=0; BATCH_ID<TOTAL_BATCHES; BATCH_ID++)); do
       start_time=$(date +%s)
-      log_info "$(log_hipen)"
+      log_info "$(log_hyphen)"
       log_echo "[${phase_upper}] Processing batch $BATCH_ID..."
 
       job_type="incremental"
@@ -560,7 +552,7 @@ run_e2e_phase() {
       fi
 
       log_info "[${phase}] Batch $BATCH_ID ingest (parquet + Hudi) completed in $duration_formatted"
-      log_info "$(log_hipen)"
+      log_info "$(log_hyphen)"
     done
   fi
 

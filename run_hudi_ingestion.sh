@@ -134,6 +134,7 @@ if [[ -n "$TABLE_NAME_SUFFIX_ARG" ]]; then
 fi
 
 TABLE_BASE_PATH="${DATA_PATH}/${TABLE_NAME}"
+
 if [[ -n "$BATCH_ID_ARG" ]]; then
   STREAMER_SOURCE_ROOT="${SOURCE_DATA}/batch_${BATCH_ID_ARG}"
 else
@@ -156,7 +157,7 @@ SPARK_SUBMIT_JARS="$HUDI_JARS"
 
 log_info "$(log_equal)"
 log_info "Running Hudi Streamer"
-log_info "$(log_hipen)"
+log_info "$(log_hyphen)"
 log_info "HUDI_VERSION    : $TARGET_HUDI_VERSION"
 log_info "TABLE_TYPE      : $TABLE_TYPE"
 log_info "TABLE_NAME      : $TABLE_NAME"
@@ -168,13 +169,17 @@ log_info "HUDI_JARS       : $HUDI_JARS"
 log_info "$(log_equal)"
 
 log_info "Executing spark-submit command: "
-log_info "$(log_hipen)"
+log_info "$(log_hyphen)"
 
 log_info "spark-submit command: $SPARK_HOME/bin/spark-submit \
   --master ${SPARK_MASTER} \
   --deploy-mode client \
   --jars "$SPARK_SUBMIT_JARS" \
   --properties-file "${SPARK_DEFAULTS_CONF}" \
+  --conf spark.hadoop.mapreduce.fileoutputcommitter.algorithm.version=2 \
+  --conf spark.hadoop.fs.s3a.committer.name=directory \
+  --conf spark.sql.sources.commitProtocolClass=org.apache.spark.internal.io.cloud.PathOutputCommitProtocol \
+  --conf spark.sql.parquet.output.committer.class=org.apache.spark.internal.io.cloud.BindingParquetOutputCommitter \
   --conf spark.serializer=org.apache.spark.serializer.KryoSerializer \
   --conf spark.sql.extensions=org.apache.spark.sql.hudi.HoodieSparkSessionExtension \
   --conf spark.sql.catalog.spark_catalog=org.apache.spark.sql.hudi.catalog.HoodieCatalog \
@@ -198,9 +203,7 @@ log_info "spark-submit command: $SPARK_HOME/bin/spark-submit \
   --hoodie-conf hoodie.parquet.small.file.limit=-1 \
   --hoodie-conf hoodie.compact.inline=false \
   --hoodie-conf hoodie.compact.async.enabled=false"
-
-log_info "$(log_hipen)"
-
+log_info "$(+log_hyphen)"
 
 append_hudi_write_perf() {
   local duration_sec="$1"
@@ -221,6 +224,11 @@ if time "${SPARK_HOME}/bin/spark-submit" \
   --deploy-mode client \
   --jars "$SPARK_SUBMIT_JARS" \
   --properties-file "${SPARK_DEFAULTS_CONF}" \
+  --conf spark.sql.adaptive.enabled=true \
+  --conf spark.hadoop.mapreduce.fileoutputcommitter.algorithm.version=2 \
+  --conf spark.hadoop.fs.s3a.committer.name=directory \
+  --conf spark.sql.sources.commitProtocolClass=org.apache.spark.internal.io.cloud.PathOutputCommitProtocol \
+  --conf spark.sql.parquet.output.committer.class=org.apache.spark.internal.io.cloud.BindingParquetOutputCommitter \
   --conf spark.serializer=org.apache.spark.serializer.KryoSerializer \
   --conf spark.sql.extensions=org.apache.spark.sql.hudi.HoodieSparkSessionExtension \
   --conf spark.sql.catalog.spark_catalog=org.apache.spark.sql.hudi.catalog.HoodieCatalog \
@@ -256,7 +264,7 @@ else
   _wp_dur=$((_wp_end - _wp_start))
   append_hudi_write_perf "$_wp_dur" "failure"
   log_error "❌ Hudi Ingestion job failed in ${_wp_dur} seconds"
-  log_hipen
+  log_hyphen
   exit 1
 fi
-log_hipen
+log_hyphen

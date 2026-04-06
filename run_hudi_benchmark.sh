@@ -131,7 +131,7 @@ SPARK_SUBMIT_JARS="$HUDI_SPARK_BUNDLE_JAR"
 
 log_equal
 log_info "🚀 Starting Hudi Benchmark"
-log_hipen
+log_hyphen
 log_info "Hudi Version      : $TARGET_HUDI_VERSION"
 log_info "Table Type        : $TABLE_TYPE"
 log_info "Data Path         : $BENCH_DATA_PATH"
@@ -140,7 +140,7 @@ log_info "Script Path       : $PY_SCRIPT"
 log_equal
 
 log_info "Executing spark-submit command: "
-log_hipen
+log_hyphen
 log_info "${SPARK_HOME}"/bin/spark-submit \
   --master "${SPARK_MASTER}" \
   --deploy-mode client \
@@ -151,7 +151,7 @@ log_info "${SPARK_HOME}"/bin/spark-submit \
   --conf "spark.sql.extensions=org.apache.spark.sql.hudi.HoodieSparkSessionExtension" \
   "$PY_SCRIPT" \
   "$BENCH_DATA_PATH"
-log_hipen
+log_hyphen
 
 if "${SPARK_HOME}"/bin/spark-submit \
   --master "${SPARK_MASTER}" \
@@ -167,7 +167,7 @@ then
   log_success "✅ Benchmark job completed successfully"
 else
   log_error "❌ Benchmark job failed"
-  log_hipen "------------------------------------------------------------------------------"
+  log_hyphen "------------------------------------------------------------------------------"
   exit 1
 fi
-log_hipen "------------------------------------------------------------------------------"
+log_hyphen "------------------------------------------------------------------------------"

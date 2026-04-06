@@ -1,186 +1,333 @@
 # Hudi Performance Testing
 
+A repeatable benchmark suite for comparing Apache Hudi read/write performance across versions on Spark (YARN). The suite generates wide parquet datasets, ingests them into COPY_ON_WRITE and MERGE_ON_READ Hudi tables, and records execution times in CSV reports.
+
+## Table of Contents
+
+- [Overview](#overview)
+- [Project Structure](#project-structure)
+- [Prerequisites](#prerequisites)
+- [Configuration](#configuration)
+- [Quick Start](#quick-start)
+- [Step-by-Step Usage](#step-by-step-usage)
+  - [1. Node Setup](#1-node-setup)
+  - [2. Data Generation](#2-data-generation)
+  - [3. Hudi Ingestion](#3-hudi-ingestion)
+  - [4. Benchmarking](#4-benchmarking)
+  - [5. End-to-End Test](#5-end-to-end-test)
+- [Output Artifacts](#output-artifacts)
+- [Script Reference](#script-reference)
+- [Testing](#testing)
+- [Troubleshooting](#troubleshooting)
+
+---
+
 ## Overview
 
-This repo runs a repeatable Hudi logical timestamp benchmark flow on Spark:
+The benchmark flow compares a `SOURCE_HUDI_VERSION` (stable) against a `TARGET_HUDI_VERSION` (candidate) using 4 batches:
 
-1. Generate parquet source data.
-2. Ingest that data into Hudi tables with `SOURCE_HUDI_VERSION` and `TARGET_HUDI_VERSION`.
-3. Run read benchmarks for the configured Hudi versions.
-4. Persist E2E state, logs, and benchmark results to S3 so runs can resume safely.
+| Batch | Data Generation | Hudi Ingestion Version | Benchmark |
+|-------|-----------------|------------------------|-----------|
+| 0 | Initial (Scala) | `SOURCE_HUDI_VERSION` | Both versions |
+| 1 | Incremental (Python) | `SOURCE_HUDI_VERSION` | Both versions |
+| 2 | Incremental (Python) | `TARGET_HUDI_VERSION` | Both versions |
+| 3 | Incremental (Python) | `TARGET_HUDI_VERSION` | Both versions |
+
+State is persisted to S3 after every step, so interrupted runs resume safely.
+
+---
+
+## Project Structure
+
+```
+.
+├── setup_node.sh                    # One-time node setup (Spark + Hudi jars)
+├── run_parquet_ingestion.sh         # Generate initial or incremental parquet data
+├── run_hudi_ingestion.sh            # Ingest parquet into a Hudi table via DeltaStreamer
+├── run_hudi_benchmark.sh            # Run a single Spark read benchmark
+├── run_benchmark_suite.py           # Benchmark multiple Hudi versions and write CSV
+├── run_e2e_performance_test.sh      # Full 4-batch E2E orchestrator (single table type)
+├── run_e2e_performance_test_all.sh  # Run E2E for both COW and MOR sequentially
+├── scripts/
+│   ├── load_config.sh               # Config loader + shared logging functions
+│   ├── common.properties            # Central configuration (edit before running)
+│   ├── spark-defaults.conf          # Spark memory and executor settings
+│   ├── hoodie.properties            # HoodieStreamer properties
+│   ├── full_schema.avsc             # 500-column Avro schema for the dataset
+│   ├── initial_batch.scala          # Spark Shell script for initial data generation
+│   ├── incremental_batch.py         # PySpark script for incremental data generation
+│   └── hudi_benchmark.py            # PySpark read benchmark script
+├── tests/
+│   ├── test_benchmark_suite.py      # Unit tests for run_benchmark_suite.py
+│   ├── test_incremental_batch.py    # Unit tests for scripts/incremental_batch.py
+│   ├── test_hudi_benchmark.py       # Unit tests for scripts/hudi_benchmark.py
+│   └── test_load_config.sh          # Bash tests for scripts/load_config.sh
+└── README.md
+```
+
+---
+
+## Prerequisites
+
+| Requirement | Notes |
+|-------------|-------|
+| AWS EMR or EC2 node | YARN must be running; AWS credentials configured |
+| `aws` CLI | Used for S3 reads/writes and jar downloads |
+| `wget` | Used by `setup_node.sh` to download Spark and Maven jars |
+| `tmux` | Recommended for long-running sessions |
+| Python 3 | Required for `run_benchmark_suite.py` and incremental batch |
+| `pytest` (optional) | Required only to run the unit test suite |
+
+Hudi jars (`hudi-spark*-bundle` and `hudi-utilities-slim-bundle`) must be available either in S3 at `S3_JARS_PATH` or downloaded by `setup_node.sh`.
+
+---
 
 ## Configuration
 
-All runtime settings live in `common.properties`. Every shell entrypoint sources `load_config.sh`, which loads that file and expands simple variable references safely.
+All runtime settings are in `scripts/common.properties`. Edit this file **before** running any other script.
 
-Important properties:
+| Property | Description | Default |
+|----------|-------------|---------|
+| `SOURCE_HUDI_VERSION` | Baseline Hudi version | `0.14.1` |
+| `TARGET_HUDI_VERSION` | Candidate Hudi version | `0.14.2-SNAPSHOT` |
+| `SPARK_VERSION` | Spark version to install/use | `3.4.4` |
+| `SCALA_VERSION` | Scala binary version for jar names | `2.12` |
+| `HADOOP_VERSION` | Hadoop version for AWS jars | `3.3.4` |
+| `BASE_PATH` | S3 root for all data, jars, logs, and state | `s3://…/logical_ts_perf` |
+| `NUM_OF_COLUMNS` | Number of columns in the generated dataset | `500` |
+| `NUM_OF_PARTITIONS` | Number of partitions in the generated dataset | `10000` |
+| `NUM_OF_RECORDS_TO_UPDATE` | Records updated per incremental batch | `100` |
+| `IS_LOGICAL_TIMESTAMP_ENABLED` | Enable logical timestamp columns | `true` |
+| `BASE_TABLE_NAME` | Prefix for all Hudi table names | `hudi_logical` |
 
-- `SOURCE_HUDI_VERSION`, `TARGET_HUDI_VERSION`, `HUDI_VERSION`, `HUDI_VERSIONS`
-- `SPARK_VERSION`, `SCALA_VERSION`, `HADOOP_VERSION`, `HADOOP_MAJOR_VERSION`
-- `SPARK_HOME`, `BASE_PATH`, `S3_JARS_PATH`, `JARS_PATH`, `DATA_PATH`
-- `SCRIPTS_DIR`, `INITIAL_BATCH_SCALA`, `INCREMENTAL_SCRIPT`, `PY_SCRIPT`
-- `SCHEMA_FILE`, `PROPS_FILE`, `SPARK_DEFAULTS_CONF`
-- `NUM_OF_COLUMNS`, `NUM_OF_PARTITIONS`, `NUM_OF_RECORDS_PER_PARTITION`, `NUM_OF_RECORDS_TO_UPDATE` — with `load_config.sh`, these define **`DATA_SHAPE_TAG`** (`cols_parts_rpp`) and isolate `DATA_PATH`, reports, logs, and E2E state. Set **`SKIP_DATA_PATH_SHAPE_SUFFIX=1`** only if you manage `DATA_PATH` manually.
-- `SOURCE_DATA`, `BASE_TABLE_NAME`
+Table names are derived automatically, e.g.:
 
-Table names are derived from `BASE_TABLE_NAME`, table type, and the Hudi version major/minor. For example:
+- `hudi_logical_cow_0_14_lts` — COPY_ON_WRITE, Hudi 0.14.x, logical timestamps enabled
+- `hudi_logical_mor_0_14` — MERGE_ON_READ, Hudi 0.14.x, logical timestamps disabled
 
-- `hudi_logical_cow_0_14`
-- `hudi_logical_mor_0_14`
+---
 
-## Setup
-
-```sh
-sudo yum install tmux git -y
-tmux
-# tmux attach (reconnect)
-```
-
-To begin your performance testing, you can obtain the source code either via GitHub or directly from the S3 benchmark bucket.
-
-**Option 1: Using Git (Recommended)**
-
-Clone the repository directly from GitHub to ensure you have the latest version:
+## Quick Start
 
 ```sh
-git clone https://github.com/rangareddy/hudi_performace_testing.git
-cd hudi_performace_testing
-#git checkout origin/hudi_015_minor_relase_perf
-```
+# 1. Install tmux and start a session (survives disconnects)
+sudo yum install tmux -y && tmux
 
-**Option 2: Using AWS CLI**
-
-If you are working directly on an EMR cluster or an EC2 instance, you can pull the source code from S3:
-
-```sh
-# Copy the source code to your local directory
+# 2. Download and extract the project
 aws s3 cp s3://performance-benchmark-datasets-us-west-2/hudi-bench/performance/logical_ts_perf/source_code/ . --recursive
+unzip hudi_performance_testing.zip && cd hudi_performance_testing
 
-# Extract and enter the project directory
-unzip hudi_performace_testing.zip
-cd hudi_performace_testing
+# 3. Edit versions and S3 path
+vi scripts/common.properties
+
+# 4. Install Spark and download Hudi jars
+bash setup_node.sh
+
+# 5. Run the full E2E test for both table types
+bash run_e2e_performance_test_all.sh
 ```
 
-Before running `setup_node.sh`, update the `scripts/common.properties` file according to your requirements. For example, update the `SOURCE_HUDI_VERSION` and `TARGET_HUDI_VERSION`.
+---
+
+## Step-by-Step Usage
+
+### 1. Node Setup
+
+Run once per cluster node. Downloads Spark, Hudi jars, and AWS SDK jars.
 
 ```sh
 bash setup_node.sh
 ```
 
-## Data Generation
+`setup_node.sh` checks whether the configured Spark version is already installed before downloading. It downloads both `SOURCE_HUDI_VERSION` and `TARGET_HUDI_VERSION` jars from `S3_JARS_PATH`.
 
-Initial parquet generation uses `scripts/initial_batch.scala` and reads configuration from environment variables exported by `run_parquet_ingestion.sh`:
+---
 
-- `BATCH_ID`
-- `NUM_OF_COLUMNS`
-- `NUM_OF_PARTITIONS`
-- `IS_LOGICAL_TIMESTAMP_ENABLED`
-- `TARGET_DATA`
+### 2. Data Generation
 
-Incremental parquet generation uses `scripts/incremental_batch.py`:
-
-- Reads from `SOURCE_DATA/batch_0`
-- Writes to `SOURCE_DATA/batch_<BATCH_ID>`
-- Uses record keys that match the initial dataset format, so batches `1+` update real rows instead of filtering empty ranges
-
-Examples:
+**Initial batch** (uses `scripts/initial_batch.scala` via `spark-shell`):
 
 ```sh
 bash run_parquet_ingestion.sh --type initial --batch-id 0
-bash run_parquet_ingestion.sh --type incremental --batch-id 1
 ```
 
-## Hudi Ingestion
-
-Run Delta Streamer for a specific table type and Hudi version:
+**Incremental batches** (uses `scripts/incremental_batch.py` via `spark-submit`):
 
 ```sh
+bash run_parquet_ingestion.sh --type incremental --batch-id 1
+bash run_parquet_ingestion.sh --type incremental --batch-id 2
+bash run_parquet_ingestion.sh --type incremental --batch-id 3
+```
+
+The script skips a batch if the target S3 path already exists.
+
+| Option | Values | Required |
+|--------|--------|----------|
+| `--type` | `initial` or `incremental` | Yes |
+| `--batch-id` | Non-negative integer | Yes |
+
+---
+
+### 3. Hudi Ingestion
+
+Runs HoodieStreamer (DeltaStreamer) to upsert a batch of parquet data into a Hudi table.
+
+```sh
+# Ingest batch 0 with the source version into a COW table
 bash run_hudi_ingestion.sh --table-type COPY_ON_WRITE --target-hudi-version 0.14.1 --batch-id 0
+
+# Ingest batch 2 with the target version into a MOR table
 bash run_hudi_ingestion.sh --table-type MERGE_ON_READ --target-hudi-version 0.14.2-SNAPSHOT --batch-id 2
 ```
 
-Notes:
+| Option | Values | Required |
+|--------|--------|----------|
+| `--table-type` | `COPY_ON_WRITE` (or `COW`) / `MERGE_ON_READ` (or `MOR`) | Yes |
+| `--target-hudi-version` | Any version present in `JARS_PATH` | Yes |
+| `--batch-id` | Non-negative integer | No (defaults to full `SOURCE_DATA`) |
 
-- `--batch-id` is optional, but in the E2E flow it is always provided.
-- If `--batch-id` is set, ingestion reads only `SOURCE_DATA/batch_<id>`.
-- The script validates `hoodie.properties`, schema file, Spark defaults, and required Hudi jars before starting.
+---
 
-## Benchmarking
+### 4. Benchmarking
 
-Run a single benchmark:
+**Single benchmark run:**
 
 ```sh
 bash run_hudi_benchmark.sh --table-type COPY_ON_WRITE --target-hudi-version 0.14.1
+bash run_hudi_benchmark.sh --table-type MERGE_ON_READ --target-hudi-version 0.14.2-SNAPSHOT
 ```
 
-Run the benchmark suite:
+**Benchmark suite** (runs all configured Hudi versions and appends results to CSV):
 
 ```sh
-python3 run_benchmark_suite.py --table-type COPY_ON_WRITE --hudi-versions 0.14.1,0.14.2-SNAPSHOT --batch-id 2
+python3 run_benchmark_suite.py \
+  --table-type COPY_ON_WRITE \
+  --hudi-versions 0.14.1,0.14.2-SNAPSHOT \
+  --batch-id 2 \
+  --output reports/my_results.csv
 ```
 
-Behavior:
+The suite increments a persistent run sequence number in `benchmark_run_sequence.txt` and appends one row per version to the CSV. Use `--dry-run` to preview the next sequence number without modifying files.
 
-- Defaults for `--hudi-versions` come from `common.properties`.
-- `--dry-run` shows the next sequence number but does not increment `benchmark_run_sequence.txt`.
-- The suite now exits nonzero if any benchmark run fails or cannot be parsed, so E2E correctly marks the step as failed.
+| Option | Default | Description |
+|--------|---------|-------------|
+| `--table-type` | `COPY_ON_WRITE` | Table type to benchmark |
+| `--hudi-versions` | From `common.properties` | Comma-separated list of versions |
+| `--batch-id` | `0` | Recorded in the CSV for traceability |
+| `--output` | `hudi_benchmark_results.csv` | Output CSV path (created or appended) |
 
-## E2E Performance Test
+---
 
-Run the end-to-end flow:
+### 5. End-to-End Test
+
+Runs all 4 batches (12 steps total) for a single table type with S3-backed state and resumption:
 
 ```sh
 bash run_e2e_performance_test.sh --table-type COPY_ON_WRITE
 bash run_e2e_performance_test.sh --table-type MERGE_ON_READ
 ```
 
-(or)
+Or run both table types sequentially:
 
 ```sh
 bash run_e2e_performance_test_all.sh
 ```
 
-The E2E flow runs **two phases**, each with **5 batches** (15 steps per phase: parquet → Hudi → benchmark):
+**Options:**
 
-1. **Baseline** — Hudi ingestion uses **`SOURCE_HUDI_VERSION` only** for batches `0–4` (batch `0` = initial, `1–4` = incremental).
-2. **Experiment** — batches `0–2` use **`SOURCE_HUDI_VERSION`**; batches `3–4` use **`TARGET_HUDI_VERSION`**.
+| Option | Description |
+|--------|-------------|
+| `--table-type` | `COPY_ON_WRITE` or `MERGE_ON_READ` (required) |
+| `--dry-run` | Print the plan only; do not execute any step |
+| `--force` | Ignore saved state; rerun all steps from scratch |
 
-**Read benchmarks** use the Hudi Spark bundle for **one version per phase**: **baseline** → **`SOURCE_HUDI_VERSION` only**; **experiment** → **`TARGET_HUDI_VERSION` only** (each per-batch benchmark run uses that phase’s version).
+**Resumption:** If a run is interrupted, re-running the same command will skip steps that previously succeeded and retry the first failed step. Use `--force` to rerun everything.
 
-For **MERGE_ON_READ**, E2E still runs offline **`HoodieCompactor`** then a post-compaction read benchmark. **Hudi 0.15+ Delta Streamer requires `hoodie.compact.inline=true`**, so ingestion does not force `inline=false` (that fails in `StreamSync`). Ingestion may already compact inline, so **`HoodieCompactor` often has nothing to schedule**; **`run_hudi_compaction.sh`** then exits successfully with write-perf status **`no_pending_compaction`** unless **`HUDI_COMPACTION_ALLOW_EMPTY=false`**.
+---
 
-After both phases, **`scripts/compare_e2e_phases.py`** writes **`reports/e2e_baseline_vs_experiment_*.csv`** with aggregated read and write times (baseline vs experiment, delta %).
+## Output Artifacts
 
-Options:
+| Artifact | Location | Description |
+|----------|----------|-------------|
+| Read benchmark CSV | `reports/hudi_benchmark_results_<cow\|mor>_<lts>_<versions>.csv` | Execution times and record counts per run |
+| Write performance CSV | `reports/hudi_write_performance_<cow\|mor>_<lts>_<versions>.csv` | Parquet and Hudi ingestion durations |
+| E2E state file | `.e2e_state/state_<table>_<lts>_v<ver>.txt` | Step success/failure for resumption |
+| Log file | `logs/<YYYYMMDD>/e2e_<table>_v<ver>_<lts>.log` | Full stdout/stderr for the E2E run |
+| S3 copies | `${BASE_PATH}/reports/`, `${BASE_PATH}/logs/`, `${BASE_PATH}/e2e_state/` | Uploaded after each batch |
 
-- `--table-type` required: `COPY_ON_WRITE` or `MERGE_ON_READ`
-- `--dry-run`: print the plan only
-- `--force`: ignore saved state and rerun all steps
+**Read benchmark CSV columns:**
 
-State and artifacts (per phase: `_baseline` / `_experiment` in filenames where noted). Paths include **`DATA_SHAPE_TAG`** = `NUM_OF_COLUMNS_NUM_OF_PARTITIONS_NUM_OF_RECORDS_PER_PARTITION` (e.g. `500_2000_1`).
+| Column | Description |
+|--------|-------------|
+| `run_sequence` | Monotonically increasing run counter |
+| `table_type` | `COPY_ON_WRITE` or `MERGE_ON_READ` |
+| `hudi_version` | Hudi version used for the benchmark |
+| `batch_id` | Which batch was in the table at benchmark time |
+| `execution_time_seconds` | Elapsed time for the Spark read + count |
+| `count` | Distinct record count returned |
+| `run_timestamp_utc` | UTC timestamp when the row was recorded |
+| `start_time` / `end_time` | Wall-clock start and end of the benchmark run |
+| `status` | `ok`, `parse_failed`, `exit_code_N`, or `timeout` |
 
-- Parquet + Hudi tables: `${DATA_PATH}/…` with `DATA_PATH` defaulting to `${BASE_PATH}/data/${DATA_SHAPE_TAG}`; source parquet under `wide_<cols>cols_<parts>parts_<rpp>rpp[_lts]`.
-- Local state: `.e2e_state/<DATA_SHAPE_TAG>/state_{baseline|experiment}_<table>_<IS_LOGICAL_TIMESTAMP_ENABLED>_v<ver>.txt` — **two levels**: (1) `phase_completeness=success` skips the whole phase on rerun unless `--force`; (2) `step…=success|failure` per batch stage (parquet, Hudi, benchmark, and MOR compaction/post-benchmark when applicable).
-- S3 state: `${BASE_PATH}/e2e_state/<DATA_SHAPE_TAG>/state_{baseline|experiment}_...`
-- Local log: `logs/<YYYYMMDD>/<DATA_SHAPE_TAG>/e2e_<table>_v<ver>_<IS_LOGICAL_TIMESTAMP_ENABLED>_<DATA_SHAPE_TAG>.log` (and matching `*_step_timings.csv`).
-- Read benchmarks: `reports/<DATA_SHAPE_TAG>/read/hudi_benchmark_results_<cow|mor>_<lts>_<versions>_<DATA_SHAPE_TAG>_{baseline|experiment}.csv`
-- Write performance: `reports/<DATA_SHAPE_TAG>/write/hudi_write_performance_<cow|mor>_<lts>_<versions>_<DATA_SHAPE_TAG>_{baseline|experiment}.csv`
-- Comparison: `reports/<DATA_SHAPE_TAG>/e2e_baseline_vs_experiment_<cow|mor>_<lts>_<versions>_<DATA_SHAPE_TAG>.csv` (compare script appends `_<baseline>_vs_<experiment>` before `.csv`)
-- S3 uploads: `${BASE_PATH}/reports/<DATA_SHAPE_TAG>/read|write/`, comparison under `${BASE_PATH}/reports/<DATA_SHAPE_TAG>/`; logs under `${BASE_PATH}/logs/<YYYYMMDD>/<DATA_SHAPE_TAG>/`
-
-The E2E script uploads state to S3 after each step **within the current phase**, so reruns can resume baseline or experiment independently.
+---
 
 ## Script Reference
 
-| Script | Purpose |
-|--------|--------|
-| `setup_node.sh` | One-time setup for Spark, jars, and runtime directories. |
-| `load_config.sh` | Loads `common.properties`, expands simple variable references, and validates core runtime dependencies. |
-| `run_parquet_ingestion.sh` | Generates parquet data. Requires `--type` and `--batch-id`. |
-| `run_hudi_ingestion.sh` | Runs Hudi Delta Streamer for a table type and Hudi version; validates required files before running. |
-| `run_hudi_benchmark.sh` | Runs a single Spark benchmark against a Hudi table. |
-| `run_benchmark_suite.py` | Runs benchmarks for multiple Hudi versions and writes CSV rows with run sequence and batch id. |
-| `run_e2e_performance_test.sh` | Baseline (5 batches, all SOURCE) + experiment (5 batches, mixed SOURCE/TARGET), comparison report, S3 uploads. |
-| `scripts/compare_e2e_phases.py` | Aggregates read/write CSVs from baseline vs experiment into one comparison CSV. |
+| Script | Type | Description |
+|--------|------|-------------|
+| `setup_node.sh` | Bash | One-time node setup: Spark + Hudi jars |
+| `run_parquet_ingestion.sh` | Bash | Generate initial or incremental parquet batches |
+| `run_hudi_ingestion.sh` | Bash | Run HoodieStreamer upsert for a given table type and version |
+| `run_hudi_benchmark.sh` | Bash | Run a single Spark read benchmark against a Hudi table |
+| `run_benchmark_suite.py` | Python | Benchmark multiple Hudi versions; append results to CSV |
+| `run_e2e_performance_test.sh` | Bash | Full 4-batch E2E flow with state, logs, and S3 upload |
+| `run_e2e_performance_test_all.sh` | Bash | Run E2E for both COW and MOR table types sequentially |
+| `scripts/load_config.sh` | Bash | Load `common.properties`, validate runtime deps, provide `log_*` functions |
+| `scripts/initial_batch.scala` | Scala | Generate the initial 500-column parquet dataset |
+| `scripts/incremental_batch.py` | Python | Filter and write an incremental parquet batch from batch_0 |
+| `scripts/hudi_benchmark.py` | Python | Load a Hudi table via Spark, count distinct records, print elapsed time |
 
-Use `-h` or `--help` on any script for the latest CLI usage.
+Use `-h` or `--help` on any script for the full CLI usage.
+
+---
+
+## Testing
+
+Run the unit tests (no Spark or AWS required):
+
+```sh
+# Python unit tests
+python3 -m pytest tests/ -v
+
+# Bash tests for config loading
+bash tests/test_load_config.sh
+```
+
+| Test file | What it covers |
+|-----------|---------------|
+| `tests/test_benchmark_suite.py` | Sequence tracking, output parsing, `run_benchmark` status codes, CSV output correctness |
+| `tests/test_incremental_batch.py` | Range calculation, value generation, env var handling, Spark mock integration |
+| `tests/test_hudi_benchmark.py` | Output format patterns matched by the benchmark suite parser |
+| `tests/test_load_config.sh` | Config parsing, variable expansion, comment stripping, `log_*` function output, `PROPS_FILE` prefix, `SOURCE_DATA` derivation |
+
+---
+
+## Troubleshooting
+
+**`Spark home not found`**
+Run `bash setup_node.sh` first, or verify `SPARK_HOME` in `common.properties` matches the installed path.
+
+**`Hudi Spark Bundle Jar not found`**
+Run `bash setup_node.sh` to download jars, or manually copy them to `JARS_PATH`. Jar names follow the pattern `hudi-spark<X.Y>-bundle_<scala>-<hudi_version>.jar`.
+
+**`AWS Java SDK Bundle Jar not found`**
+`setup_node.sh` downloads this from Maven Central into `$SPARK_HOME/jars/`. Run it again or check your internet access.
+
+**Benchmark shows `parse_failed`**
+The Spark job completed but the output did not contain the expected lines. Check the log file under `logs/` for Spark errors or stack traces.
+
+**E2E step keeps failing and retrying**
+Use `--force` to reset all step state and start from scratch, or delete `.e2e_state/state_*.txt` and the corresponding S3 state file.
+
+**Incremental batch produces 0 records**
+The filter uses `value_<i>_<batch_id>` keys. Verify the initial batch (`batch_0`) was written with the matching key format by checking the parquet files at `SOURCE_DATA/batch_0`.

@@ -1,14 +1,10 @@
 #!/usr/bin/env bash
 #
-# End-to-end Hudi performance test:
-#   1. One initial parquet ingestion
-#   2. Hudi ingestion (initial load)
-#   3. Run benchmark
-#   4. Two incremental cycles: (generate incremental data → Hudi ingestion → benchmark) × 2
+# Run end-to-end Hudi performance test for both COPY_ON_WRITE and MERGE_ON_READ table types.
+# Delegates to run_e2e_performance_test.sh for each table type sequentially.
 #
 # Usage:
-#   bash run_e2e_performance_test.sh --table-type COPY_ON_WRITE
-#   bash run_e2e_performance_test.sh --table-type MERGE_ON_READ
+#   bash run_e2e_performance_test_all.sh
 #
 set -euo pipefail
 

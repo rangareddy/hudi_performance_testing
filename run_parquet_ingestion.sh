@@ -145,7 +145,7 @@ fi
 
 log_equal
 log_info "Starting ${INGESTION_TYPE_TITLE} ingestion job"
-log_hipen
+log_hyphen
 log_info "Ingestion Type        : $INGESTION_TYPE_TITLE"
 log_info "Execution Script      : $EXECUTION_SCRIPT"
 log_info "Source Data Path      : $SOURCE_DATA"
@@ -245,11 +245,11 @@ else
 fi
 
 log_basic_info() {
-  log_hipen
+  log_hyphen
   log_info "Ingestion Type : ${INGESTION_TYPE_TITLE}"
   log_info "Batch ID       : ${REQUESTED_BATCH_ID}"
   log_info "Target Path    : ${TARGET_DATA}"
-  log_hipen
+  log_hyphen
 }
 
 if [ $EXECUTION_STATUS_CODE -eq 0 ]; then

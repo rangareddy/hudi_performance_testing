@@ -19,7 +19,7 @@ export MVN_APACHE_URL=$MVN_URL/org/apache
 
 log_equal
 log_info "Hudi performance testing node setup"
-log_hipen
+log_hyphen
 log_info "SOURCE_HUDI_VERSION  : ${SOURCE_HUDI_VERSION}"
 log_info "TARGET_HUDI_VERSION  : ${TARGET_HUDI_VERSION}"
 log_info "SPARK_VERSION        : ${SPARK_VERSION}"
@@ -73,7 +73,7 @@ get_installed_spark_version() {
 
 setup_spark() {
   log_info "Setting the Spark $SPARK_VERSION with Hadoop $HADOOP_MAJOR_VERSION"
-  log_hipen
+  log_hyphen
   if [[ ! -d "$SPARK_HOME" ]]; then
     SPARK_TAR_FILE="spark-${SPARK_VERSION}-bin-hadoop${HADOOP_MAJOR_VERSION}.tgz"
     SPARK_URL="https://archive.apache.org/dist/spark/spark-${SPARK_VERSION}/${SPARK_TAR_FILE}"
