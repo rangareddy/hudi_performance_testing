@@ -1,0 +1,4 @@
+run_sequence,table_type,hudi_version,batch_id,iteration,execution_time_seconds,count,run_timestamp_utc,start_time,end_time,status
+1,COPY_ON_WRITE,0.14.1,0,1,108.9,200000,2026-04-04 05:25:29,2026-04-04 05:25:29 UTC,2026-04-04 05:27:47 UTC,ok
+1,COPY_ON_WRITE,0.14.1,0,2,89.18,200000,2026-04-04 05:27:48,2026-04-04 05:27:48 UTC,2026-04-04 05:29:46 UTC,ok
+1,COPY_ON_WRITE,0.14.1,0,3,86.75,200000,2026-04-04 05:29:47,2026-04-04 05:29:47 UTC,2026-04-04 05:31:42 UTC,ok

@@ -1,0 +1,11 @@
+run_timestamp_utc,table_type,operation,batch_id,hudi_version,execution_time_seconds,status,is_logical_timestamp_enabled
+2026-04-04 05:11:50,COPY_ON_WRITE,parquet_initial,0,,0,skipped_existing,true
+2026-04-04 05:18:51,COPY_ON_WRITE,hudi_streamer,0,0.14.1,420,ok,true
+2026-04-04 05:18:54,COPY_ON_WRITE,parquet_incremental,1,,0,skipped_existing,true
+2026-04-04 05:20:32,COPY_ON_WRITE,hudi_streamer,1,0.14.1,98,ok,true
+2026-04-04 05:20:35,COPY_ON_WRITE,parquet_incremental,2,,0,skipped_existing,true
+2026-04-04 05:22:11,COPY_ON_WRITE,hudi_streamer,2,0.14.1,95,ok,true
+2026-04-04 05:22:14,COPY_ON_WRITE,parquet_incremental,3,,0,skipped_existing,true
+2026-04-04 05:23:49,COPY_ON_WRITE,hudi_streamer,3,0.14.1,94,ok,true
+2026-04-04 05:23:52,COPY_ON_WRITE,parquet_incremental,4,,0,skipped_existing,true
+2026-04-04 05:25:27,COPY_ON_WRITE,hudi_streamer,4,0.14.1,94,ok,true

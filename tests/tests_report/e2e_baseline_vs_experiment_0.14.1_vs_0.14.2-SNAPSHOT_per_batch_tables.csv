@@ -1,0 +1,27 @@
+table_type,is_logical_timestamp,section,batch_info,batch_size/count,baseline_seconds,experiment_seconds,diff_seconds,diff_percent
+COW,false,write benchmark,Initial Ingestion,200000,28,-,,
+COW,false,write benchmark,Incremental Batch1,100,27,-,,
+COW,false,write benchmark,Incremental Batch2,100,28,-,,
+COW,false,write benchmark,Incremental Batch3,100,29,-,,
+COW,false,write benchmark,Incremental Batch4,100,29,-,,
+COW,false,read_benchmark,Full table read,200000,93.76,98.54,4.78,5.10
+COW,true,write benchmark,Initial Ingestion,200000,420,401,-19.00,-4.52
+COW,true,write benchmark,Incremental Batch1,100,98,94,-4.00,-4.08
+COW,true,write benchmark,Incremental Batch2,100,95,92,-3.00,-3.16
+COW,true,write benchmark,Incremental Batch3,100,94,95,1.00,1.06
+COW,true,write benchmark,Incremental Batch4,100,94,93,-1.00,-1.06
+COW,true,read_benchmark,Full table read,200000,86.75,97.84,11.09,12.78
+MOR,false,write benchmark,Initial Ingestion,200000,387,394,7.00,1.81
+MOR,false,write benchmark,Incremental Batch1,100,82,86,4.00,4.88
+MOR,false,write benchmark,Incremental Batch2,100,83,83,0.00,0.00
+MOR,false,write benchmark,Incremental Batch3,100,82,85,3.00,3.66
+MOR,false,write benchmark,Incremental Batch4,100,82,86,4.00,4.88
+MOR,false,read_benchmark,Read before compaction,200000,137.84,150.32,12.48,9.05
+MOR,false,read_benchmark_post_compaction,Post-compaction read,200000,124.63,137.12,12.49,10.02
+MOR,true,write benchmark,Initial Ingestion,200000,382,389,7.00,1.83
+MOR,true,write benchmark,Incremental Batch1,100,87,81,-6.00,-6.90
+MOR,true,write benchmark,Incremental Batch2,100,87,84,-3.00,-3.45
+MOR,true,write benchmark,Incremental Batch3,100,86,84,-2.00,-2.33
+MOR,true,write benchmark,Incremental Batch4,100,86,83,-3.00,-3.49
+MOR,true,read_benchmark,Read before compaction,200000,137.67,147.86,10.19,7.40
+MOR,true,read_benchmark_post_compaction,Post-compaction read,200000,127.11,133.28,6.17,4.85

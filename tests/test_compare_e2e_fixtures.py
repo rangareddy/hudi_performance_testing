@@ -19,7 +19,7 @@ sys.path.insert(0, str(SCRIPTS_DIR))
 
 import compare_e2e_phases as e2e  # noqa: E402
 
-DATA_FIXTURES = Path(__file__).resolve().parent / "data"
+DATA_FIXTURES = Path(__file__).resolve().parent / "tests_report"
 READ_FIXTURES = DATA_FIXTURES / "read"
 WRITE_FIXTURES = DATA_FIXTURES / "write"
 # Matches version_tag from fixture read/write CSVs (0.14.1 baseline / 0.14.2-SNAPSHOT experiment)
