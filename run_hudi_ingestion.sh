@@ -17,7 +17,8 @@ usage() {
   log_info "  bash $SCRIPT_NAME --table-type <COPY_ON_WRITE|MERGE_ON_READ> --target-hudi-version <0.14.1|0.14.2> [--batch-id <id>]"
   log_info ""
   log_info "Options:"
-  log_info "  --batch-id    (optional) Ingest only parquet under SOURCE_DATA/batch_<id>; if omitted, use SOURCE_DATA as root."
+  log_info "  --batch-id            (optional) Ingest only parquet under SOURCE_DATA/batch_<id>; if omitted, use SOURCE_DATA as root."
+  log_info "  --table-name-suffix   (optional) Appended to table name, e.g. baseline / experiment (E2E)."
   log_info ""
   log_info "Examples:"
   log_info "  bash $SCRIPT_NAME --table-type COPY_ON_WRITE --target-hudi-version 0.14.1"
@@ -26,14 +27,9 @@ usage() {
   exit 1
 }
 
-# Schema file: use file:// if local path
-SCHEMA_FILE_ARG="$SCHEMA_FILE"
-if [[ -n "$SCHEMA_FILE_ARG" && "$SCHEMA_FILE_ARG" != file://* && "$SCHEMA_FILE_ARG" != s3:* ]]; then
-  SCHEMA_FILE_ARG="file://${SCHEMA_FILE}"
-fi
-
 TARGET_HUDI_VERSION="$HUDI_VERSION"
 BATCH_ID_ARG=""
+TABLE_NAME_SUFFIX_ARG=""
 
 while [[ $# -gt 0 ]]; do
   case $1 in
@@ -59,6 +55,14 @@ while [[ $# -gt 0 ]]; do
         usage
       fi
       BATCH_ID_ARG="$2"
+      shift 2
+      ;;
+    --table-name-suffix)
+      if [[ -z "$2" ]]; then
+        log_error "❌ Error: --table-name-suffix requires a value"
+        usage
+      fi
+      TABLE_NAME_SUFFIX_ARG="$2"
       shift 2
       ;;
     -h|--help)
@@ -87,6 +91,19 @@ TABLE_TYPE_UPPER=$(echo "$TABLE_TYPE" | tr '[:lower:]' '[:upper:]')
 # Append Hudi version to table name (e.g. 0.14.1 -> 0_14)
 HUDI_VERSION_SUFFIX=$(echo "$TARGET_HUDI_VERSION" | sed 's/-.*//' | cut -d. -f1,2 | tr '.' '_')
 IS_LOGICAL_TIMESTAMP_ENABLED=${IS_LOGICAL_TIMESTAMP_ENABLED:-true}
+BASE_TABLE_NAME=${BASE_TABLE_NAME:-hudi_regular}
+
+# Avro schema (not in common.properties): defaults next to this repo's scripts/.
+# Optional env overrides: SCHEMA_FILE (LTS), SCHEMA_FILE_NO_LTS_STRING_TS (non-LTS).
+if [[ "$IS_LOGICAL_TIMESTAMP_ENABLED" == true ]]; then
+  _schema_effective="${SCHEMA_FILE:-${SCRIPT_DIR}/scripts/lts_schema.avsc}"
+else
+  _schema_effective="${SCHEMA_FILE_NO_LTS_STRING_TS:-${SCRIPT_DIR}/scripts/non_lts_schema.avsc}"
+fi
+SCHEMA_FILE_ARG="$_schema_effective"
+if [[ -n "$SCHEMA_FILE_ARG" && "$SCHEMA_FILE_ARG" != file://* && "$SCHEMA_FILE_ARG" != s3:* ]]; then
+  SCHEMA_FILE_ARG="file://${SCHEMA_FILE_ARG}"
+fi
 
 case "$TABLE_TYPE_UPPER" in
   COPY_ON_WRITE|COW)
@@ -108,6 +125,14 @@ if [[ "$IS_LOGICAL_TIMESTAMP_ENABLED" == true ]]; then
   TABLE_NAME="${TABLE_NAME}_lts"
 fi
 
+if [[ -n "$TABLE_NAME_SUFFIX_ARG" ]]; then
+  if [[ ! "$TABLE_NAME_SUFFIX_ARG" =~ ^[a-zA-Z0-9_]+$ ]]; then
+    log_error "❌ Error: --table-name-suffix must be alphanumeric or underscore only"
+    exit 1
+  fi
+  TABLE_NAME="${TABLE_NAME}_${TABLE_NAME_SUFFIX_ARG}"
+fi
+
 TABLE_BASE_PATH="${DATA_PATH}/${TABLE_NAME}"
 
 if [[ -n "$BATCH_ID_ARG" ]]; then
@@ -126,29 +151,31 @@ if [ ! -f "$HUDI_SPARK_JAR" ]; then
   log_error "❌ Hudi Spark Bundle Jar not found: $HUDI_SPARK_JAR"
   exit 1
 fi
-HUDI_JARS="${HUDI_SPARK_JAR},${HUDI_UTILITIES_JAR}" 
+HUDI_JARS="${HUDI_SPARK_JAR},${HUDI_UTILITIES_JAR}"
+SPARK_SUBMIT_JARS="$HUDI_JARS"
+[[ -n "${AWS_S3_JARS:-}" ]] && SPARK_SUBMIT_JARS="${SPARK_SUBMIT_JARS},${AWS_S3_JARS}"
 
-log_equal
-log_info "Running Delta Streamer"
-log_hyphen
+log_info "$(log_equal)"
+log_info "Running Hudi Streamer"
+log_info "$(log_hyphen)"
 log_info "HUDI_VERSION    : $TARGET_HUDI_VERSION"
 log_info "TABLE_TYPE      : $TABLE_TYPE"
 log_info "TABLE_NAME      : $TABLE_NAME"
 log_info "TABLE_BASE_PATH : $TABLE_BASE_PATH"
 log_info "SOURCE_DATA     : $SOURCE_DATA"
+log_info "Schema (Avro)   : $_schema_effective"
 log_info "Streamer root   : $STREAMER_SOURCE_ROOT"
 log_info "HUDI_JARS       : $HUDI_JARS"
-log_equal
+log_info "$(log_equal)"
 
 log_info "Executing spark-submit command: "
-log_hyphen
+log_info "$(log_hyphen)"
 
 log_info "spark-submit command: $SPARK_HOME/bin/spark-submit \
-  --master yarn \
+  --master ${SPARK_MASTER} \
   --deploy-mode client \
-  --jars "$HUDI_JARS" \
+  --jars "$SPARK_SUBMIT_JARS" \
   --properties-file "${SPARK_DEFAULTS_CONF}" \
-  --conf spark.sql.adaptive.enabled=true \
   --conf spark.hadoop.mapreduce.fileoutputcommitter.algorithm.version=2 \
   --conf spark.hadoop.fs.s3a.committer.name=directory \
   --conf spark.sql.sources.commitProtocolClass=org.apache.spark.internal.io.cloud.PathOutputCommitProtocol \
@@ -161,6 +188,7 @@ log_info "spark-submit command: $SPARK_HOME/bin/spark-submit \
   --props "$PROPS_FILE" \
   --table-type "$TABLE_TYPE" \
   --op UPSERT \
+  --disable-compaction \
   --target-base-path "$TABLE_BASE_PATH" \
   --target-table "$TABLE_NAME" \
   --source-class org.apache.hudi.utilities.sources.ParquetDFSSource \
@@ -171,8 +199,11 @@ log_info "spark-submit command: $SPARK_HOME/bin/spark-submit \
   --hoodie-conf hoodie.streamer.schemaprovider.target.schema.file="$SCHEMA_FILE_ARG" \
   --hoodie-conf hoodie.datasource.write.recordkey.field=col_1 \
   --hoodie-conf hoodie.datasource.write.precombine.field=col_1 \
-  --hoodie-conf hoodie.datasource.write.partitionpath.field=partition_col"  
-log_hyphen
+  --hoodie-conf hoodie.datasource.write.partitionpath.field=partition_col \
+  --hoodie-conf hoodie.parquet.small.file.limit=-1 \
+  --hoodie-conf hoodie.compact.inline=false \
+  --hoodie-conf hoodie.compact.async.enabled=false"
+log_info "$(+log_hyphen)"
 
 append_hudi_write_perf() {
   local duration_sec="$1"
@@ -184,14 +215,14 @@ append_hudi_write_perf() {
     echo "$header" > "$WRITE_PERF_CSV"
   fi
   local bid="${BATCH_ID_ARG:-}"
-  echo "$(date -u +"%Y-%m-%d %H:%M:%S"),${TABLE_TYPE},hudi_delta_streamer,${bid},${TARGET_HUDI_VERSION},${duration_sec},${status},${IS_LOGICAL_TIMESTAMP_ENABLED:-true}" >> "$WRITE_PERF_CSV"
+  echo "$(date -u +"%Y-%m-%d %H:%M:%S"),${TABLE_TYPE},hudi_streamer,${bid},${TARGET_HUDI_VERSION},${duration_sec},${status},${IS_LOGICAL_TIMESTAMP_ENABLED:-true}" >> "$WRITE_PERF_CSV"
 }
 
 _wp_start=$(date +%s)
 if time "${SPARK_HOME}/bin/spark-submit" \
-  --master yarn \
+  --master "${SPARK_MASTER}" \
   --deploy-mode client \
-  --jars "$HUDI_JARS" \
+  --jars "$SPARK_SUBMIT_JARS" \
   --properties-file "${SPARK_DEFAULTS_CONF}" \
   --conf spark.sql.adaptive.enabled=true \
   --conf spark.hadoop.mapreduce.fileoutputcommitter.algorithm.version=2 \
@@ -206,6 +237,7 @@ if time "${SPARK_HOME}/bin/spark-submit" \
   --props "$PROPS_FILE" \
   --table-type "$TABLE_TYPE" \
   --op UPSERT \
+  --disable-compaction \
   --target-base-path "$TABLE_BASE_PATH" \
   --target-table "$TABLE_NAME" \
   --source-class org.apache.hudi.utilities.sources.ParquetDFSSource \
@@ -216,11 +248,15 @@ if time "${SPARK_HOME}/bin/spark-submit" \
   --hoodie-conf hoodie.streamer.schemaprovider.target.schema.file="$SCHEMA_FILE_ARG" \
   --hoodie-conf hoodie.datasource.write.recordkey.field=col_1 \
   --hoodie-conf hoodie.datasource.write.precombine.field=col_1 \
-  --hoodie-conf hoodie.datasource.write.partitionpath.field=partition_col
+  --hoodie-conf hoodie.datasource.write.partitionpath.field=partition_col \
+  --hoodie-conf hoodie.parquet.small.file.limit=-1 \
+  --hoodie-conf hoodie.compact.inline.max.delta.commits=20 \
+  --hoodie-conf hoodie.compact.inline=false \
+  --hoodie-conf hoodie.compact.async.enabled=false
 then
   _wp_end=$(date +%s)
   _wp_dur=$((_wp_end - _wp_start))
-  log_info "Write Execution Complete. hudi_delta_streamer table ${TABLE_TYPE} version ${TARGET_HUDI_VERSION}. Total execution time: ${_wp_dur} seconds"
+  log_info "Write Execution Complete. hudi_streamer table ${TABLE_TYPE} version ${TARGET_HUDI_VERSION}. Total execution time: ${_wp_dur} seconds"
   append_hudi_write_perf "$_wp_dur" "ok"
   log_success "✅ Hudi Ingestion job completed successfully in ${_wp_dur} seconds"
 else
