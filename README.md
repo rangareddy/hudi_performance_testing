@@ -87,19 +87,19 @@ Hudi jars (`hudi-spark*-bundle` and `hudi-utilities-slim-bundle`) must be availa
 
 All runtime settings are in `scripts/common.properties`. Edit this file **before** running any other script.
 
-| Property | Description | Default |
+| Property Name | Description | Property Value |
 |----------|-------------|---------|
-| `SOURCE_HUDI_VERSION` | Baseline Hudi version | `0.14.1` |
-| `TARGET_HUDI_VERSION` | Candidate Hudi version | `0.14.2-SNAPSHOT` |
-| `SPARK_VERSION` | Spark version to install/use | `3.4.4` |
-| `SCALA_VERSION` | Scala binary version for jar names | `2.12` |
-| `HADOOP_VERSION` | Hadoop version for AWS jars | `3.3.4` |
-| `BASE_PATH` | S3 root for all data, jars, logs, and state | `s3://…/logical_ts_perf` |
-| `NUM_OF_COLUMNS` | Number of columns in the generated dataset | `500` |
-| `NUM_OF_PARTITIONS` | Number of partitions in the generated dataset | `10000` |
-| `NUM_OF_RECORDS_TO_UPDATE` | Records updated per incremental batch | `100` |
-| `IS_LOGICAL_TIMESTAMP_ENABLED` | Enable logical timestamp columns | `true` |
-| `BASE_TABLE_NAME` | Prefix for all Hudi table names | `hudi_logical` |
+| `SOURCE_HUDI_VERSION` | Baseline Hudi version | For example, `0.14.1` |
+| `TARGET_HUDI_VERSION` | Candidate Hudi version | For example, `0.14.2` |
+| `SPARK_VERSION` | Spark version to install/use | For example, `3.4.4` |
+| `SCALA_VERSION` | Scala binary version for jar names | For example, `2.12` |
+| `HADOOP_VERSION` | Hadoop version for AWS jars | For example, `3.3.4` |
+| `BASE_PATH` | S3 root for all data, jars, logs, and state | For example, `s3://…/perf_test` |
+| `NUM_OF_COLUMNS` | Number of columns in the generated dataset | For example, `500` |
+| `NUM_OF_PARTITIONS` | Number of partitions in the generated dataset | For example, `10000` |
+| `NUM_OF_RECORDS_TO_UPDATE` | Records updated per incremental batch | For example, `100` |
+| `IS_LOGICAL_TIMESTAMP_ENABLED` | Enable logical timestamp columns | For example, `false` |
+| `BASE_TABLE_NAME` | Prefix for all Hudi table names | For example, `hudi_logical` |
 
 Table names are derived automatically, e.g.:
 
@@ -128,25 +128,12 @@ tmux
 
 To begin your performance testing, you can obtain the source code either via GitHub or directly from the S3 benchmark bucket.
 
-**Option 1: Using Git (Recommended)**
+**Using Git**
 
 Clone the repository directly from GitHub to ensure you have the latest version:
 
 ```sh
 git clone https://github.com/rangareddy/hudi_performance_testing.git
-cd hudi_performance_testing
-```
-
-**Option 2: Using AWS CLI**
-
-If you are working directly on an EMR cluster or an EC2 instance, you can pull the source code from S3:
-
-```sh
-# Copy the source code to your local directory
-aws s3 cp s3://performance-benchmark-datasets-us-west-2/hudi-bench/performance/logical_ts_perf/source_code/ . --recursive
-
-# Extract and enter the project directory
-unzip hudi_performance_testing.zip
 cd hudi_performance_testing
 ```
 
