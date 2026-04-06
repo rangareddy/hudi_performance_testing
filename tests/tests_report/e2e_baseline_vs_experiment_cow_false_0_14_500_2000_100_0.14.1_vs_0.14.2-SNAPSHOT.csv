@@ -4,9 +4,3 @@ COW,false,write_total_seconds,794.0000,756.0000,-38.0000,-4.79,6,5
 COW,false,write_parquet_seconds,0.0000,0.0000,0.0000,,,
 COW,false,write_hudi_delta_streamer_seconds,794.0000,756.0000,-38.0000,-4.79,,
 COW,false,write_hudi_compaction_seconds,0.0000,0.0000,0.0000,,,
-MOR,false,read_benchmark_total_seconds,152.6933,148.1133,-4.5800,-3.00,1,1
-MOR,false,write_total_seconds,831.0000,853.0000,22.0000,2.65,6,6
-MOR,false,write_parquet_seconds,0.0000,0.0000,0.0000,,,
-MOR,false,write_hudi_delta_streamer_seconds,731.0000,751.0000,20.0000,2.74,,
-MOR,false,write_hudi_compaction_seconds,100.0000,102.0000,2.0000,2.00,,
-MOR,false,read_benchmark_post_compaction_total_seconds,129.6900,131.5867,1.8967,1.46,1,1

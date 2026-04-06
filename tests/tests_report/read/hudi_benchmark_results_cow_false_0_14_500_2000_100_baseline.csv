@@ -1,3 +1,5 @@
-run_sequence,table_type,hudi_version,batch_id,iteration,execution_time_seconds,count,run_timestamp_utc,start_time,end_time,status
-7,COPY_ON_WRITE,0.14.1,0,1,113.97,200000,2026-04-06 05:35:43,2026-04-06 05:35:43 UTC,2026-04-06 05:38:05 UTC,ok
-7,COPY_ON_WRITE,0.14.1,0,2,93.76,200000,2026-04-06 05:38:06,2026-04-06 05:38:06 UTC,2026-04-06 05:40:09 UTC,ok
+run_sequence,table_type,hudi_version,batch_id,iteration,read_aggregate,execution_time_seconds,count,run_timestamp_utc,start_time,end_time,status
+1,COPY_ON_WRITE,0.14.1,0,1,,108.88,200000,2026-04-06 09:23:55,2026-04-06 09:21:38,2026-04-06 09:23:55,ok
+1,COPY_ON_WRITE,0.14.1,0,2,,92.34,200000,2026-04-06 09:25:56,2026-04-06 09:23:56,2026-04-06 09:25:56,ok
+1,COPY_ON_WRITE,0.14.1,0,3,,87.86,200000,2026-04-06 09:27:52,2026-04-06 09:25:57,2026-04-06 09:27:52,ok
+1,COPY_ON_WRITE,0.14.1,0,,avg,96.36,200000,2026-04-06 09:27:52,,,ok

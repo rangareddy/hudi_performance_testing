@@ -1,9 +1,4 @@
 table_type,is_logical_timestamp,metric,baseline_value,experiment_value,delta_seconds,delta_percent,baseline_row_count_ok,experiment_row_count_ok
-COW,false,read_benchmark_total_seconds,96.3600,95.8167,-0.5433,-0.56,1,1
-COW,false,write_total_seconds,794.0000,756.0000,-38.0000,-4.79,6,5
-COW,false,write_parquet_seconds,0.0000,0.0000,0.0000,,,
-COW,false,write_hudi_delta_streamer_seconds,794.0000,756.0000,-38.0000,-4.79,,
-COW,false,write_hudi_compaction_seconds,0.0000,0.0000,0.0000,,,
 MOR,false,read_benchmark_total_seconds,152.6933,148.1133,-4.5800,-3.00,1,1
 MOR,false,write_total_seconds,831.0000,853.0000,22.0000,2.65,6,6
 MOR,false,write_parquet_seconds,0.0000,0.0000,0.0000,,,

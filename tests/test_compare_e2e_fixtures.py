@@ -1,10 +1,10 @@
 """
 Golden-file tests for scripts/compare_e2e_phases.py.
 
-tests/data/read and tests/data/write hold captured benchmark CSVs. Running
-process_report_bundle (same as --report-dir) must produce the two E2E summary
-files next to the bundle root (not under read/ or write/), matching the golden
-CSVs committed under tests/data/.
+tests/tests_report/read and tests/tests_report/write hold captured benchmark CSVs.
+Running process_report_bundle (same as --report-dir) must produce the two E2E summary
+files next to the bundle root (not under read/ or write/), matching the golden CSVs
+committed under tests/tests_report/.
 """
 
 import shutil
@@ -65,15 +65,15 @@ class TestCompareE2EFixtures(unittest.TestCase):
             self.assertEqual(
                 _normalize_csv_text(out_summary.read_text()),
                 expected_summary,
-                msg="Summary CSV differs from tests/data golden (regenerate: "
-                "python3 scripts/compare_e2e_phases.py --report-dir tests/data "
+                msg="Summary CSV differs from tests/tests_report golden (regenerate: "
+                "python3 scripts/compare_e2e_phases.py --report-dir tests/tests_report "
                 f"--initial-batch-size {INITIAL_BATCH_SIZE} "
                 f"--incremental-batch-size {INCREMENTAL_BATCH_SIZE})",
             )
             self.assertEqual(
                 _normalize_csv_text(out_detail.read_text()),
                 expected_detail,
-                msg="Per-batch detail CSV differs from tests/data golden",
+                msg="Per-batch detail CSV differs from tests/tests_report golden",
             )
 
 

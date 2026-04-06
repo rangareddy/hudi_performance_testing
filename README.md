@@ -63,7 +63,7 @@ State is persisted to S3 after every step, so interrupted runs resume safely.
 │   ├── incremental_batch.py         # PySpark script for incremental data generation
 │   └── hudi_benchmark.py            # PySpark read benchmark script
 ├── tests/
-│   ├── data/                        # Golden read/write CSVs + expected E2E comparison outputs
+│   ├── tests_report/               # Golden read/write CSVs + expected E2E comparison outputs
 │   ├── test_benchmark_suite.py      # Unit tests for run_benchmark_suite.py
 │   ├── test_compare_e2e_fixtures.py # Golden-file tests for compare_e2e_phases.py
 │   ├── test_incremental_batch.py    # Unit tests for scripts/incremental_batch.py
@@ -325,10 +325,10 @@ python3 scripts/compare_e2e_phases.py --report-dir reports/<shape_tag_directory>
 
 Use `--report-root <dir>` to process every immediate subdirectory that contains both `read/` and `write/`. Output filenames include the inferred Hudi version tag, e.g. `e2e_baseline_vs_experiment_0.14.1_vs_0.14.2-SNAPSHOT.csv`.
 
-To refresh **golden** comparison files used by tests after editing fixture CSVs under `tests/data/read` and `tests/data/write`:
+To refresh **golden** comparison files used by tests after editing fixture CSVs under `tests/tests_report/read` and `tests/tests_report/write`:
 
 ```sh
-python3 scripts/compare_e2e_phases.py --report-dir tests/data \
+python3 scripts/compare_e2e_phases.py --report-dir tests/tests_report \
   --initial-batch-size 200000 \
   --incremental-batch-size 100
 ```
@@ -377,13 +377,13 @@ bash tests/test_parquet_ingestion.sh
 | Test file | What it covers |
 |-----------|---------------|
 | `tests/test_benchmark_suite.py` | Sequence tracking, output parsing, `run_benchmark` status codes, CSV output, multi-iteration `avg` rows |
-| `tests/test_compare_e2e_fixtures.py` | `compare_e2e_phases.process_report_bundle` vs golden CSVs in `tests/data/`; `load_read_by_batch` prefers `read_aggregate=avg` |
+| `tests/test_compare_e2e_fixtures.py` | `compare_e2e_phases.process_report_bundle` vs golden CSVs in `tests/tests_report/`; `load_read_by_batch` prefers `read_aggregate=avg` |
 | `tests/test_incremental_batch.py` | Range calculation, value generation, env var handling, Spark mock integration |
 | `tests/test_hudi_benchmark.py` | Output format patterns matched by the benchmark suite parser |
 | `tests/test_load_config.sh` | Config parsing, variable expansion, comment stripping, `log_*` output, `PROPS_FILE`, `SOURCE_DATA` derivation |
 | `tests/test_parquet_ingestion.sh` | Parquet CLI validation, Avro/`NUM_OF_COLUMNS`, missing schema, skip-existing, missing Scala script |
 
-Fixture CSVs for the compare tests live in `tests/data/read/`, `tests/data/write/`, and golden E2E outputs at `tests/data/e2e_baseline_vs_experiment_*.csv` (not inside `read/` or `write/`).
+Fixture CSVs for the compare tests live in `tests/tests_report/read/`, `tests/tests_report/write/`, and golden E2E outputs at `tests/tests_report/e2e_baseline_vs_experiment_*.csv` (not inside `read/` or `write/`).
 
 ---
 

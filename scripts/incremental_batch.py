@@ -32,8 +32,14 @@ def create_spark(app_name: str) -> SparkSession:
 
 
 def get_env_int(name: str, default: int) -> int:
-    """Read integer environment variable safely."""
-    return int(os.environ.get(name, str(default)))
+    """Read integer environment variable safely; invalid or empty values use default."""
+    raw = os.environ.get(name)
+    if raw is None or not str(raw).strip():
+        return default
+    try:
+        return int(str(raw).strip())
+    except ValueError:
+        return default
 
 
 def calculate_range(batch_id: int, num_records: int):
@@ -65,6 +71,7 @@ def run_incremental_batch(spark: SparkSession, batch_id: int):
 
     print(f"🚀 Starting incremental batch {batch_id}")
     is_incremental_data_processed = False
+    total_records_to_process = None  # set when building from col_1 filter; None = skip count check (chained read)
     if batch_id > 1:
         parent = os.path.dirname(source_data_path)
         source_data_path = os.path.join(parent, f"batch_{batch_id - 1}")
@@ -114,7 +121,7 @@ def run_incremental_batch(spark: SparkSession, batch_id: int):
     final_bench_df = final_bench_df.persist(StorageLevel.MEMORY_AND_DISK)
     record_count = final_bench_df.count()
     print(f"✅ Filtered {record_count} records")
-    if record_count != total_records_to_process:
+    if total_records_to_process is not None and record_count != total_records_to_process:
         final_bench_df.unpersist()
         print(f"❌ Expected exactly {total_records_to_process} records, got {record_count} (batch_id={batch_id}, total_records_to_process={total_records_to_process})")
         sys.exit(1)

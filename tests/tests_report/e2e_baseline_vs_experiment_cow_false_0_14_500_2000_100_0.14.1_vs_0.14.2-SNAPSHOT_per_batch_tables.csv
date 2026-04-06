@@ -5,10 +5,3 @@ COW,false,write benchmark,Incremental Batch2,100,92,93,1.00,1.09
 COW,false,write benchmark,Incremental Batch3,100,88,90,2.00,2.27
 COW,false,write benchmark,Incremental Batch4,100,94,90,-4.00,-4.26
 COW,false,read_benchmark,Full table read,200000,96.36,95.82,-0.54,-0.56
-MOR,false,write benchmark,Initial Ingestion,200000,388,412,24.00,6.19
-MOR,false,write benchmark,Incremental Batch1,100,87,82,-5.00,-5.75
-MOR,false,write benchmark,Incremental Batch2,100,85,86,1.00,1.18
-MOR,false,write benchmark,Incremental Batch3,100,85,85,0.00,0.00
-MOR,false,write benchmark,Incremental Batch4,100,86,86,0.00,0.00
-MOR,false,read_benchmark,Read before compaction,200000,152.69,148.11,-4.58,-3.00
-MOR,false,read_benchmark_post_compaction,Post-compaction read,200000,129.69,131.59,1.90,1.46

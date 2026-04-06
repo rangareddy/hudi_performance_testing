@@ -95,8 +95,7 @@ class TestGetEnvInt(unittest.TestCase):
 
     def test_returns_default_on_non_integer(self):
         with patch.dict("os.environ", {"BAD_VAR": "not_an_int"}):
-            with self.assertRaises(ValueError):
-                ib.get_env_int("BAD_VAR", 0)
+            self.assertEqual(ib.get_env_int("BAD_VAR", 0), 0)
 
 
 class TestRunIncrementalBatch(unittest.TestCase):
@@ -156,6 +155,24 @@ class TestRunIncrementalBatch(unittest.TestCase):
                 ib.run_incremental_batch(spark, batch_id=1)
         # col("col_1").isin([...]) - check filter was called
         df.filter.assert_called_once()
+
+    def test_batch_id_gt_one_reads_prior_batch_without_count_validation(self):
+        """batch_id > 1: read batch_{n-1} parquet; no total_records_to_process NameError."""
+        spark = MagicMock()
+        chained_df = MagicMock()
+        chained_df.persist.return_value = chained_df
+        chained_df.count.return_value = 42
+        spark.read.parquet.return_value = chained_df
+        env = {
+            "SOURCE_DATA": "s3://bucket/source/batch_1",
+            "TARGET_DATA": "s3://bucket/target/batch_2",
+        }
+        with patch.dict("os.environ", env):
+            ib.run_incremental_batch(spark, batch_id=2)
+        spark.read.parquet.assert_called_once_with("s3://bucket/source/batch_1")
+        chained_df.repartition.assert_called_once_with(1)
+        repartitioned = chained_df.repartition.return_value
+        repartitioned.write.mode.assert_called_once_with("append")
 
 
 if __name__ == "__main__":
