@@ -498,6 +498,7 @@ run_e2e_phase() {
           --batch-id "$_batch" \
           --iteration "$_it" \
           --run-sequence "$_seq" \
+          --read-performance-iterations "${READ_PERF_ITERATIONS}" \
           --table-name-suffix "$_suffix" \
           --output "$_out"
     done

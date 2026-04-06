@@ -8,6 +8,7 @@ without invoking Spark or AWS.
 import csv
 import os
 import re
+import statistics
 import sys
 import tempfile
 import unittest
@@ -222,6 +223,8 @@ class TestCsvOutput(unittest.TestCase):
             self.assertEqual(row["table_type"], "COPY_ON_WRITE")
             self.assertEqual(row["hudi_version"], "0.14.1")
             self.assertEqual(row["batch_id"], "2")
+            self.assertEqual(row.get("iteration"), "1")
+            self.assertEqual(row.get("read_aggregate"), "")
             self.assertEqual(row["count"], "500")
             self.assertAlmostEqual(float(row["execution_time_seconds"]), 3.14, places=1)
             self.assertEqual(row["status"], "ok")
@@ -240,6 +243,62 @@ class TestCsvOutput(unittest.TestCase):
             self.assertEqual(len(rows), 2)
             self.assertEqual(rows[0]["run_sequence"], "1")
             self.assertEqual(rows[1]["run_sequence"], "2")
+
+    def test_multi_iteration_writes_avg_row_on_last(self):
+        mock_output = (
+            "Execution Complete. Count: 100\n"
+            "Total execution time: 4.0 seconds\n"
+        )
+
+        def _run_iter(tmpdir, it, seq=7):
+            fake_script = Path(tmpdir) / "run_hudi_benchmark.sh"
+            fake_script.touch()
+            mock_result = MagicMock()
+            mock_result.returncode = 0
+            mock_result.stdout = mock_output.replace("4.0", str(10.0 + it))
+            mock_result.stderr = ""
+            args = [
+                "run_benchmark_suite.py",
+                "--table-type", "COPY_ON_WRITE",
+                "--hudi-versions", "0.14.1",
+                "--batch-id", "0",
+                "--iteration", str(it),
+                "--run-sequence", str(seq),
+                "--read-performance-iterations", "3",
+                "--output", str(Path(tmpdir) / "results.csv"),
+            ]
+            with patch.object(suite, "SCRIPT_DIR", Path(tmpdir)):
+                with patch("subprocess.run", return_value=mock_result):
+                    with patch("sys.argv", args):
+                        return suite.main()
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            self.assertEqual(_run_iter(tmpdir, 1), 0)
+            self.assertEqual(_run_iter(tmpdir, 2), 0)
+            self.assertEqual(_run_iter(tmpdir, 3), 0)
+            out = Path(tmpdir) / "results.csv"
+            with open(out) as f:
+                rows = list(csv.DictReader(f))
+            self.assertEqual(len(rows), 4)  # 3 iterations + 1 avg
+            self.assertEqual(rows[0]["iteration"], "1")
+            self.assertEqual(rows[2]["iteration"], "3")
+            avg = rows[3]
+            self.assertEqual(avg["read_aggregate"], "avg")
+            self.assertEqual(avg.get("iteration"), "")
+            mean = float(avg["execution_time_seconds"])
+            self.assertAlmostEqual(mean, statistics.mean([11.0, 12.0, 13.0]), places=3)
+
+    def test_allocate_run_sequence_only_prints_number(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            from io import StringIO
+
+            with patch.object(suite, "SCRIPT_DIR", Path(tmpdir)):
+                with patch("sys.argv", ["run_benchmark_suite.py", "--allocate-run-sequence-only"]):
+                    buf = StringIO()
+                    with patch("sys.stdout", buf):
+                        code = suite.main()
+            self.assertEqual(code, 0)
+            self.assertEqual(buf.getvalue().strip(), "1")
 
 
 if __name__ == "__main__":

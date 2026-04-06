@@ -285,8 +285,9 @@ def load_hudi_delta_streamer_by_batch(path: Path) -> Dict[int, float]:
 
 
 def load_read_by_batch(path: Path) -> Dict[int, Tuple[float, int]]:
-    """Read benchmark: for each batch_id, pick one ok row with max (run_sequence, iteration)."""
-    best: Dict[int, Tuple[int, int, float, int]] = {}  # batch_id -> (run_sequence, iteration, sec, count)
+    """Read benchmark: prefer read_aggregate=avg (latest run_sequence); else max (run_sequence, iteration)."""
+    best_avg: Dict[int, Tuple[int, float, int]] = {}  # batch_id -> (run_sequence, sec, count)
+    best_iter: Dict[int, Tuple[int, int, float, int]] = {}  # batch_id -> (seq, iteration, sec, count)
     if not path.is_file():
         return {}
     with open(path, newline="") as f:
@@ -295,13 +296,27 @@ def load_read_by_batch(path: Path) -> Dict[int, Tuple[float, int]]:
                 continue
             bid = _int_or_zero(row.get("batch_id", ""))
             seq = _int_or_zero(row.get("run_sequence", "0"))
-            itn = _int_or_zero((row.get("iteration") or "1").strip())
             sec = _float_or_zero(row.get("execution_time_seconds", ""))
             cnt = _int_or_zero(row.get("count", "0"))
-            prev = best.get(bid)
+            agg = (row.get("read_aggregate") or "").strip()
+            if agg == "avg":
+                prev_a = best_avg.get(bid)
+                if prev_a is None or seq > prev_a[0]:
+                    best_avg[bid] = (seq, sec, cnt)
+                continue
+            itn = _int_or_zero((row.get("iteration") or "1").strip())
+            prev = best_iter.get(bid)
             if prev is None or (seq, itn) > (prev[0], prev[1]):
-                best[bid] = (seq, itn, sec, cnt)
-    return {k: (v[2], v[3]) for k, v in best.items()}
+                best_iter[bid] = (seq, itn, sec, cnt)
+    out: Dict[int, Tuple[float, int]] = {}
+    all_bids = set(best_avg) | set(best_iter)
+    for bid in all_bids:
+        if bid in best_avg:
+            out[bid] = (best_avg[bid][1], best_avg[bid][2])
+        else:
+            v = best_iter[bid]
+            out[bid] = (v[2], v[3])
+    return out
 
 
 def sum_read_seconds(
