@@ -61,7 +61,8 @@ State is persisted to S3 after every step, so interrupted runs resume safely.
 │   ├── test_benchmark_suite.py      # Unit tests for run_benchmark_suite.py
 │   ├── test_incremental_batch.py    # Unit tests for scripts/incremental_batch.py
 │   ├── test_hudi_benchmark.py       # Unit tests for scripts/hudi_benchmark.py
-│   └── test_load_config.sh          # Bash tests for scripts/load_config.sh
+│   ├── test_load_config.sh          # Bash tests for scripts/load_config.sh
+│   └── test_parquet_ingestion.sh    # Bash tests for run_parquet_ingestion.sh
 └── README.md
 ```
 
@@ -104,6 +105,16 @@ Table names are derived automatically, e.g.:
 
 - `hudi_logical_cow_0_14_lts` — COPY_ON_WRITE, Hudi 0.14.x, logical timestamps enabled
 - `hudi_logical_mor_0_14` — MERGE_ON_READ, Hudi 0.14.x, logical timestamps disabled
+
+### Running locally
+
+On a laptop or any host that is **not** AWS EMR, export this **before** sourcing scripts or running `run_parquet_ingestion.sh`, `run_hudi_ingestion.sh`, `run_e2e_performance_test.sh`, and other entry points that call `scripts/load_config.sh`:
+
+```sh
+export IS_EMR_CLUSTER=false
+```
+
+With `IS_EMR_CLUSTER=false`, `load_config.sh` loads `scripts/common_local.properties` instead of `scripts/common.properties`. Adjust paths and flags in `common_local.properties` for your machine (for example `SPARK_HOME`, `BASE_PATH`, and `IS_LOCAL_RUN=true` if you use a local Spark master).
 
 ---
 
@@ -313,6 +324,9 @@ python3 -m pytest tests/ -v
 
 # Bash tests for config loading
 bash tests/test_load_config.sh
+
+# Bash tests for run_parquet_ingestion.sh (CLI, Avro/NUM_OF_COLUMNS, skip-existing; no Spark required to pass most cases)
+bash tests/test_parquet_ingestion.sh
 ```
 
 | Test file | What it covers |
@@ -321,6 +335,7 @@ bash tests/test_load_config.sh
 | `tests/test_incremental_batch.py` | Range calculation, value generation, env var handling, Spark mock integration |
 | `tests/test_hudi_benchmark.py` | Output format patterns matched by the benchmark suite parser |
 | `tests/test_load_config.sh` | Config parsing, variable expansion, comment stripping, `log_*` function output, `PROPS_FILE` prefix, `SOURCE_DATA` derivation |
+| `tests/test_parquet_ingestion.sh` | Parquet script CLI errors, `NUM_OF_COLUMNS` vs Avro schema, missing schema path, skip when batch output exists, missing Scala script; optional Spark step may fail without a cluster |
 
 ---
 

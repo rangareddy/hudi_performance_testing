@@ -85,6 +85,73 @@ if [ -z "${SOURCE_DATA:-}" ]; then
   exit 1
 fi
 
+# Avro schema must match wide table column count (same defaults as run_hudi_ingestion.sh).
+# Optional: SCHEMA_FILE (LTS) or SCHEMA_FILE_NO_LTS_STRING_TS (non-LTS).
+IS_LOGICAL_TIMESTAMP_ENABLED="${IS_LOGICAL_TIMESTAMP_ENABLED:-true}"
+if [[ "$IS_LOGICAL_TIMESTAMP_ENABLED" == true ]]; then
+  _PARQUET_AVRO_SCHEMA="${SCHEMA_FILE:-${SCRIPT_DIR}/scripts/lts_schema.avsc}"
+else
+  _PARQUET_AVRO_SCHEMA="${SCHEMA_FILE_NO_LTS_STRING_TS:-${SCRIPT_DIR}/scripts/non_lts_schema.avsc}"
+fi
+if [[ ! -f "$_PARQUET_AVRO_SCHEMA" ]]; then
+  log_error "❌ Avro schema file not found: ${_PARQUET_AVRO_SCHEMA}"
+  exit 1
+fi
+
+NUM_OF_COLUMNS="${NUM_OF_COLUMNS:-500}"
+_py_cmd=(python3)
+if ! command -v python3 >/dev/null 2>&1; then
+  if command -v python >/dev/null 2>&1; then
+    _py_cmd=(python)
+  else
+    log_error "❌ python3 or python is required to parse ${_PARQUET_AVRO_SCHEMA}"
+    exit 1
+  fi
+fi
+
+# NUM_OF_COLUMNS is the wide-table data column count (col_1..col_N), matching initial_batch.scala.
+# The Avro schema appends partition_col as the last field, so len(fields) is usually NUM_OF_COLUMNS + 1.
+_AVRO_VALIDATE_OUT="$("${_py_cmd[@]}" -c "
+import json, sys
+path, want_s = sys.argv[1], sys.argv[2]
+want = int(want_s)
+with open(path, encoding=\"utf-8\") as f:
+    doc = json.load(f)
+if doc.get(\"type\") != \"record\":
+    print(\"schema root must be a record\", file=sys.stderr)
+    sys.exit(2)
+fields = doc.get(\"fields\")
+if not isinstance(fields, list) or not fields:
+    print(\"schema must contain a non-empty fields array\", file=sys.stderr)
+    sys.exit(2)
+last_name = (fields[-1].get(\"name\") or \"\")
+if last_name == \"partition_col\":
+    data_cols = len(fields) - 1
+    total = len(fields)
+else:
+    data_cols = len(fields)
+    total = len(fields)
+if data_cols != want:
+    msg = \"NUM_OF_COLUMNS=%s but schema has %s data fields (total Avro fields=%s; last field=%r)\" % (want, data_cols, total, last_name)
+    print(msg, file=sys.stderr)
+    sys.exit(2)
+print(data_cols)
+print(total)
+" "$_PARQUET_AVRO_SCHEMA" "$NUM_OF_COLUMNS")" || {
+  log_error "❌ Avro schema validation failed for ${_PARQUET_AVRO_SCHEMA}"
+  exit 1
+}
+
+_AVRO_DATA_COLS="$(echo "$_AVRO_VALIDATE_OUT" | sed -n '1p')"
+_AVRO_TOTAL_FIELDS="$(echo "$_AVRO_VALIDATE_OUT" | sed -n '2p')"
+if [[ ! "$_AVRO_DATA_COLS" =~ ^[0-9]+$ ]] || [[ ! "$_AVRO_TOTAL_FIELDS" =~ ^[0-9]+$ ]]; then
+  log_error "❌ Unexpected output from schema validator"
+  exit 1
+fi
+log_info "Validated NUM_OF_COLUMNS=${NUM_OF_COLUMNS} matches ${_AVRO_DATA_COLS} data fields in ${_PARQUET_AVRO_SCHEMA} (${_AVRO_TOTAL_FIELDS} Avro fields total incl. partition_col when present)"
+export NUM_OF_COLUMNS
+unset _py_cmd _AVRO_VALIDATE_OUT _AVRO_DATA_COLS _AVRO_TOTAL_FIELDS
+
 append_parquet_write_perf() {
   local duration_sec="$1"
   local status="$2"

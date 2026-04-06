@@ -126,7 +126,7 @@ fi
 
 log_equal
 log_info "Running HoodieCompactor (scheduleAndExecute)"
-log_hipen
+log_hyphen
 log_info "HUDI_VERSION    : $TARGET_HUDI_VERSION"
 log_info "TABLE_NAME      : $TABLE_NAME"
 log_info "TABLE_BASE_PATH : $TABLE_BASE_PATH"
@@ -179,4 +179,4 @@ else
   log_error "❌ HoodieCompactor failed after ${_wp_dur} seconds (exit ${_compact_rc})"
   exit 1
 fi
-log_hipen
+log_hyphen
